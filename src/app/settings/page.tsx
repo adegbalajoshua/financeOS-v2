@@ -123,7 +123,7 @@ export default function SettingsPage() {
         const sUser = (session.user as any).username || session.user.email?.split("@")[0]?.toLowerCase();
         if (sUser && sUser !== "demo_user" && (!savedUsername || savedUsername === "demo_user" || savedUsername.toLowerCase().includes("joshua"))) {
           savedUsername = sUser;
-          localStorage.setItem("financeos_username", savedUsername);
+          localStorage.setItem("financeos_username", savedUsername as string);
         }
       }
       if (savedUsername) {

@@ -150,7 +150,7 @@ export function CsvImportTool() {
           }
           
           if (events.length > 0) {
-            await importCsvData(events);
+            await importCsvData(events as any);
           }
         }
       } catch (e: any) {

@@ -35,7 +35,7 @@ function DashboardContent() {
   const { accounts, events, activeCycleId } = useAppData();
   
   // Reconstructed Verified Logic: calling calculateNetWorth
-  const netWorth = calculateNetWorth(accounts);
+  const netWorth = calculateNetWorth(accounts as any);
 
   return (
     <div className="flex flex-col md:flex-row gap-6 p-6">

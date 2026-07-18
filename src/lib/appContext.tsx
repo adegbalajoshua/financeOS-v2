@@ -53,6 +53,7 @@ export interface BudgetRecord {
   cycleId?: string;
   type?: string;
   budgetCycleId?: string;
+  color?: string;
   updated_at?: string;
   deleted_at?: string;
 }
@@ -137,11 +138,11 @@ function reconcileAllState(
   const budgetReport = generateBudgetReport(
     activeEvents as any,
     cycleId,
-    activeBudgets.map((b) => ({ category: b.category || b.name, planned: b.planned }))
+    activeBudgets.map((b) => ({ category: b.category || b.name || "Unknown", planned: b.planned }))
   );
   const reconciledBudgets = activeBudgets.map((b) => {
     const item = budgetReport.items.find(
-      (i) => i.category.toLowerCase() === (b.category || b.name).toLowerCase()
+      (i) => i.category.toLowerCase() === (b.category || b.name || "Unknown").toLowerCase()
     );
     return { ...b, spent: item ? item.spent : 0 };
   });
@@ -353,7 +354,7 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
 
   const isConnected = status === "authenticated" || !!(supabaseCreds.url && supabaseCreds.key);
 
-  const syncToSupabase = async () => {
+  const syncToSupabase = async (): Promise<{ success: boolean; message: string; counts?: any; errorType?: "NETWORK_ERROR" | "SERVER_REJECTION" }> => {
     if (status !== "authenticated" && (!supabaseCreds.url || !supabaseCreds.key)) {
       return { success: false, message: "Authentication session required for data persistence." };
     }
