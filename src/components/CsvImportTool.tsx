@@ -38,10 +38,28 @@ export function CsvImportTool() {
 
         // Header is index 0. Data starts at index 1.
         for (let i = 1; i < lines.length; i++) {
-          // Parse basic comma separated row
-          const row = lines[i].split(",");
-          const dateStr = row[0]?.trim();
-          const cycleId = row[1]?.trim();
+          const line = lines[i];
+          const row: string[] = [];
+          let curr = "";
+          let inQuotes = false;
+          for (let j = 0; j < line.length; j++) {
+            const char = line[j];
+            if (char === '"' && line[j + 1] === '"') {
+              curr += '"';
+              j++;
+            } else if (char === '"') {
+              inQuotes = !inQuotes;
+            } else if (char === ',' && !inQuotes) {
+              row.push(curr.trim());
+              curr = "";
+            } else {
+              curr += char;
+            }
+          }
+          row.push(curr.trim());
+
+          const dateStr = row[0];
+          const cycleId = row[1];
           const eventTypeStr = row[2]?.trim();
           const category = row[3]?.trim();
           const description = row[4]?.trim();
