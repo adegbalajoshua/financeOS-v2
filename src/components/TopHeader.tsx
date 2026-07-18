@@ -13,11 +13,13 @@ export function TopHeader() {
   const handleSync = async () => {
     try {
       const result = await syncToSupabase();
-      if (!result.success && result.errorType === 'NETWORK_ERROR') {
+      if (result.success) {
+        setSyncFailed(false);
+      } else if (result.errorType === 'NETWORK_ERROR') {
         logger.warn("Manual sync failed", { error: result.message });
         setSyncFailed(true);
-      } else {
-        setSyncFailed(false);
+      } else if (result.errorType === 'SERVER_REJECTION') {
+        logger.warn("Manual sync rejected by server", { error: result.message });
       }
     } catch (err: any) {
       logger.error("Manual sync crashed", { error: err.message });
@@ -33,11 +35,13 @@ export function TopHeader() {
       setIsOnline(true);
       try {
         const result = await syncToSupabase();
-        if (!result.success && result.errorType === 'NETWORK_ERROR') {
+        if (result.success) {
+          setSyncFailed(false);
+        } else if (result.errorType === 'NETWORK_ERROR') {
           logger.warn("Background sync after online recovery failed", { error: result.message });
           setSyncFailed(true);
-        } else {
-          setSyncFailed(false);
+        } else if (result.errorType === 'SERVER_REJECTION') {
+          logger.warn("Background sync after online recovery rejected by server", { error: result.message });
         }
       } catch (err: any) {
         logger.error("Background sync after online recovery crashed", { error: err.message });
