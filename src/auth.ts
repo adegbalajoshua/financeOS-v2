@@ -45,7 +45,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
         const user = await verifyUserCredentials(identifier, password);
         if (!user) {
-          // Check if this user exists from Google OAuth (by email check) but has no password hash set yet
+          // Check if this user exists (e.g. from a legacy migration) but has no password hash set yet
           if (identifier.includes("@")) {
             const status = await checkUserStatus(identifier.toLowerCase());
             if (status.exists) {
@@ -69,12 +69,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, account, user }) {
+    async jwt({ token, account, user, trigger, session }: any) {
+      if (trigger === "update" && session) {
+        if (session.name) token.name = session.name;
+        if (session.username) token.username = session.username;
+      }
       if (account) {
         token.accessToken = account.access_token;
       }
       if (user) {
         token.sub = user.id;
+        if (user.name) token.name = user.name;
+        if ((user as any).username) token.username = (user as any).username;
       }
       return token;
     },
@@ -83,6 +89,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.accessToken = token.accessToken;
         if (session.user && token.sub) {
           session.user.id = token.sub;
+          if (token.name) session.user.name = token.name;
+          if (token.username) (session.user as any).username = token.username;
         }
       }
       return session;

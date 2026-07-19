@@ -1,5 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
-
+import { getToken } from "next-auth/jwt";
 // Simple in-memory rate limiting store for edge / serverless instances
 const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
 
@@ -25,6 +25,8 @@ export async function middleware(req: NextRequest) {
   if (
     pathname.startsWith("/api/auth/register") ||
     pathname.startsWith("/api/auth/check-status") ||
+    pathname.startsWith("/api/auth/otp/send") ||
+    pathname.startsWith("/api/auth/otp/verify") ||
     pathname.startsWith("/api/notifications/send") ||
     pathname.startsWith("/api/demo/seed")
   ) {
@@ -49,6 +51,7 @@ export async function middleware(req: NextRequest) {
   const isPublicPath =
     pathname.startsWith("/login") ||
     pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/users") ||
     pathname.startsWith("/api/notifications") ||
     pathname.startsWith("/api/demo") ||
     pathname.startsWith("/_next") ||
@@ -59,14 +62,17 @@ export async function middleware(req: NextRequest) {
     pathname.endsWith(".ico");
 
   if (!isPublicPath) {
-    // Check if NextAuth session cookie exists
-    const hasSessionCookie =
-      req.cookies.has("authjs.session-token") ||
-      req.cookies.has("__Secure-authjs.session-token") ||
-      req.cookies.has("next-auth.session-token") ||
-      req.cookies.has("__Secure-next-auth.session-token");
+    // Cryptographically verify the NextAuth session token
+    const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "financeOS_default_secret_key_change_in_production_123456";
+    // We use secureCookie based on the environment and NEXTAUTH_URL
+    const isProduction = process.env.NODE_ENV === "production";
+    const token = await getToken({ 
+      req, 
+      secret,
+      secureCookie: isProduction && !req.url.includes("localhost")
+    });
 
-    if (!hasSessionCookie) {
+    if (!token) {
       return NextResponse.redirect(new URL("/login", req.url));
     }
   }

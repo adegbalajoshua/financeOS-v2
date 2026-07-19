@@ -14,6 +14,7 @@ vi.mock("next-auth/react", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn() })),
+  usePathname: vi.fn(() => "/"),
 }));
 
 vi.mock("../../lib/logger", () => ({
@@ -40,11 +41,17 @@ describe("Frontend Component Happy Paths", () => {
         syncToSupabase: mockSyncToSupabase,
         rejectedSyncCount: 0,
         isSyncing: false,
+        events: [],
+        accounts: [],
+        budgets: [],
+        activeCycleId: "Jul-26",
+        setIsComposerOpen: vi.fn(),
+        setEditingEventId: vi.fn(),
       });
 
       render(<TopHeader />);
 
-      const syncBtn = screen.getByText("Sync");
+      const syncBtn = screen.getByRole("button", { name: /sync/i });
       fireEvent.click(syncBtn);
 
       await waitFor(() => {

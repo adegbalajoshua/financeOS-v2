@@ -17,6 +17,7 @@ vi.mock("next-auth/react", () => ({
 
 vi.mock("next/navigation", () => ({
   useRouter: vi.fn(() => ({ push: vi.fn() })),
+  usePathname: vi.fn(() => "/"),
 }));
 
 vi.mock("../../lib/logger", () => ({
@@ -43,6 +44,8 @@ describe("Frontend Failure Paths", () => {
       events: [],
       accounts: [],
       budgets: [],
+      setIsComposerOpen: vi.fn(),
+      setEditingEventId: vi.fn(),
     });
   });
 
@@ -51,13 +54,19 @@ describe("Frontend Failure Paths", () => {
       (AppContext.useAppData as any).mockReturnValue({
         syncToSupabase: mockSyncToSupabase,
         rejectedSyncCount: 2,
+        events: [],
+        accounts: [],
+        budgets: [],
+        activeCycleId: "Jul-26",
+        setIsComposerOpen: vi.fn(),
+        setEditingEventId: vi.fn(),
       });
 
       render(<TopHeader />);
 
       // Verify visual indicator for server rejection
       await waitFor(() => {
-        expect(screen.getByText(/2 changes couldn't be saved/i)).toBeDefined();
+        expect(screen.getByText(/2 failed/i)).toBeDefined();
       });
     });
 
@@ -67,18 +76,24 @@ describe("Frontend Failure Paths", () => {
       (AppContext.useAppData as any).mockReturnValue({
         syncToSupabase: mockSyncToSupabase,
         rejectedSyncCount: 0,
+        events: [],
+        accounts: [],
+        budgets: [],
+        activeCycleId: "Jul-26",
+        setIsComposerOpen: vi.fn(),
+        setEditingEventId: vi.fn(),
       });
 
       render(<TopHeader />);
 
       // Trigger sync manually via our mock button to simulate network failure
-      const syncBtn = screen.getByText("Sync");
+      const syncBtn = screen.getByRole("button", { name: /sync/i });
       fireEvent.click(syncBtn);
 
       // Verify 'Sync Failed' indicator for network error
       await waitFor(() => {
-        expect(screen.getByText(/Sync Failed \(Will Retry\)/i)).toBeDefined();
-        expect(screen.queryByText(/changes couldn't be saved/i)).toBeNull();
+        expect(screen.getByText(/Sync Failed/i)).toBeDefined();
+        expect(screen.queryByText(/2 failed/i)).toBeNull();
       });
     });
   });

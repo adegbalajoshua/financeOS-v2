@@ -7,6 +7,7 @@ interface OtpRecord {
   code: string;
   expiresAt: number;
   verified: boolean;
+  attempts: number;
 }
 
 const otpStore: Record<string, OtpRecord> =
@@ -17,6 +18,17 @@ const otpStore: Record<string, OtpRecord> =
  */
 export async function sendOtpVerification(email: string): Promise<{ success: boolean; message?: string; error?: string }> {
   const normalizedEmail = email.toLowerCase().trim();
+  
+  // Cooldown check (60 seconds)
+  const existingRecord = otpStore[normalizedEmail];
+  if (existingRecord) {
+    const createdAt = existingRecord.expiresAt - 10 * 60 * 1000;
+    const timeSinceCreation = Date.now() - createdAt;
+    if (timeSinceCreation < 60000) {
+      return { success: false, error: "Please wait 60 seconds before requesting a new code." };
+    }
+  }
+
   const code = Math.floor(100000 + Math.random() * 900000).toString();
   const expiresAt = Date.now() + 10 * 60 * 1000; // 10 minutes
 
@@ -26,6 +38,7 @@ export async function sendOtpVerification(email: string): Promise<{ success: boo
     code,
     expiresAt,
     verified: false,
+    attempts: 0,
   };
 
   // Try saving to cloud Supabase if connected
@@ -69,45 +82,72 @@ export async function verifyOtpCode(email: string, inputCode: string): Promise<{
   const normalizedEmail = email.toLowerCase().trim();
   const cleanCode = inputCode.trim();
 
-  // Check global store first
-  const record = otpStore[normalizedEmail];
+  let record = otpStore[normalizedEmail];
 
-  // Also check Supabase if store missing or expired
-  if (!record || record.code !== cleanCode || Date.now() > record.expiresAt) {
+  // If missing from memory, try to load from Supabase
+  if (!record) {
     try {
       const supabase = getSupabaseClient();
       if (supabase) {
         const otpSvc = new OtpSupabaseService(supabase);
         const { data } = await otpSvc.getOtp(normalizedEmail);
-
-        if (data && data.code === cleanCode && new Date(data.expires_at).getTime() > Date.now()) {
-          otpStore[normalizedEmail] = {
+        if (data) {
+          record = {
             email: normalizedEmail,
-            code: cleanCode,
+            code: data.code,
             expiresAt: new Date(data.expires_at).getTime(),
-            verified: true,
+            verified: data.verified,
+            attempts: 0,
           };
-          await otpSvc.markOtpVerified(normalizedEmail);
-          return { success: true };
+          otpStore[normalizedEmail] = record;
         }
       }
     } catch (err: any) {
-      logger.debug("Supabase OTP verify check failed or table missing:", { message: err?.message || String(err) });
+      logger.debug("Supabase OTP verify load failed:", { message: err?.message || String(err) });
     }
+  }
 
-    if (!record) {
-      return { success: false, error: "No active verification code found for this email. Please request a new code." };
+  if (!record) {
+    return { success: false, error: "No active verification code found for this email. Please request a new code." };
+  }
+
+  // Lockout check
+  if (record.attempts >= 5) {
+    return { success: false, error: "Too many failed attempts. This code has been invalidated. Please request a new one." };
+  }
+
+  // Expiry check
+  if (Date.now() > record.expiresAt) {
+    return { success: false, error: "Verification code has expired. Please request a new code." };
+  }
+
+  // Code validation
+  if (record.code !== cleanCode) {
+    record.attempts += 1;
+    if (record.attempts >= 5) {
+      delete otpStore[normalizedEmail];
+      try {
+        const supabase = getSupabaseClient();
+        if (supabase) {
+          const otpSvc = new OtpSupabaseService(supabase);
+          await otpSvc.deleteOtp(normalizedEmail);
+        }
+      } catch (err) {}
+      return { success: false, error: "Too many failed attempts. This code has been invalidated. Please request a new one." };
     }
-    if (Date.now() > record.expiresAt) {
-      return { success: false, error: "Verification code has expired. Please request a new code." };
-    }
-    if (record.code !== cleanCode) {
-      return { success: false, error: "Invalid verification code. Please check and try again." };
-    }
+    return { success: false, error: `Invalid verification code. ${5 - record.attempts} attempts remaining.` };
   }
 
   // Mark verified
   record.verified = true;
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const otpSvc = new OtpSupabaseService(supabase);
+      await otpSvc.markOtpVerified(normalizedEmail);
+    }
+  } catch (err) {}
+
   return { success: true };
 }
 

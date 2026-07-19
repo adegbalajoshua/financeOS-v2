@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useAppData } from "@/lib/appContext";
 import { calculateNetWorth } from "@/domain/financeEngine/engine";
+import { Tooltip as UITooltip } from "@/components/ui/tooltip";
 
 type AccountType = "CASH" | "SAVINGS" | "INVESTMENT" | "CREDIT" | "LOAN" | "BANK" | "MOBILE" | string;
 
@@ -271,8 +272,12 @@ export default function AccountsPage() {
 
             {/* Allocation Bar */}
             <div className="w-full h-2.5 bg-black/20 rounded-full mt-4 overflow-hidden flex">
-              <div className="h-full bg-amber-400 transition-all duration-500" style={{ width: `${liquidPct}%` }} title={`Liquid Cash: ${liquidPct}%`} />
-              <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${investPct}%` }} title={`Investments: ${investPct}%`} />
+              <UITooltip content={`Liquid Cash: ${liquidPct}%`} placement="top">
+                <div className="h-full bg-amber-400 transition-all duration-500" style={{ width: `${liquidPct}%` }} />
+              </UITooltip>
+              <UITooltip content={`Investments: ${investPct}%`} placement="top">
+                <div className="h-full bg-emerald-400 transition-all duration-500" style={{ width: `${investPct}%` }} />
+              </UITooltip>
             </div>
           </div>
 
@@ -371,9 +376,11 @@ export default function AccountsPage() {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: color }} />
-                          <span className="font-semibold text-xs truncate" style={{ color: "var(--foreground)" }} title={inst}>
-                            {inst}
-                          </span>
+                          <UITooltip content={inst} placement="top">
+                            <span className="font-semibold text-xs truncate" style={{ color: "var(--foreground)" }}>
+                              {inst}
+                            </span>
+                          </UITooltip>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <span className="font-bold text-xs block" style={{ color: "var(--foreground)" }}>{fmt(bal)}</span>

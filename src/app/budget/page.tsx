@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useAppData } from "@/lib/appContext";
 import { formatCycleLabel } from "@/lib/formatCycle";
+import { Tooltip as UITooltip } from "@/components/ui/tooltip";
 
 const CATEGORY_COLORS = ["#635BFF", "#0ea5e9", "#f59e0b", "#10b981", "#6366f1", "#ec4899", "#14b8a6"];
 
@@ -555,9 +556,11 @@ export default function BudgetPage() {
                       >
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: col }} />
-                          <span className="font-semibold text-xs truncate" style={{ color: "var(--foreground)" }} title={c.name}>
-                            {c.name}
-                          </span>
+                          <UITooltip content={c.name} placement="top">
+                            <span className="font-semibold text-xs truncate" style={{ color: "var(--foreground)" }}>
+                              {c.name}
+                            </span>
+                          </UITooltip>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <span className="font-bold text-xs block" style={{ color: "var(--foreground)" }}>{fmt(s)}</span>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { Component, ReactNode, useMemo } from "react";
+import React, { Component, ReactNode, useMemo, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useAppData } from "@/lib/appContext";
 import { formatCycleLabel } from "@/lib/formatCycle";
@@ -86,26 +86,29 @@ function computeNetWorthTimeSeries(
 
   if (activeAccounts.length === 0) return [];
 
-  // Sort events by timestamp
-  const sorted = [...activeEvents]
+  // Sort events by timestamp NEWEST to OLDEST (descending)
+  const sortedDesc = [...activeEvents]
     .filter((e) => e.timestamp)
-    .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+    .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
 
-  // Build per-account opening balances
+  // Build per-account CURRENT balances and alias mapping
   const balances: Record<string, number> = {};
+  const aliasMap: Record<string, string> = {};
+
   activeAccounts.forEach((acc) => {
     const key = String(acc.id || "").trim().toLowerCase();
     const nameLower = String(acc.name || "").trim().toLowerCase();
-    const rawBal = Number(acc.openingBalance ?? acc.balance ?? 0);
+    // Anchor strictly to current balance
+    const rawBal = Number(acc.balance ?? acc.openingBalance ?? 0);
     balances[key] = rawBal;
+    aliasMap[key] = key;
     if (nameLower && nameLower !== key) {
-      balances[nameLower] = rawBal;
+      aliasMap[nameLower] = key;
     }
   });
 
   // Helper: compute total net worth from current balances map
   function totalNW(): number {
-    // Sum only by account id keys (avoid double-counting name aliases)
     let total = 0;
     activeAccounts.forEach((acc) => {
       const key = String(acc.id || "").trim().toLowerCase();
@@ -119,48 +122,55 @@ function computeNetWorthTimeSeries(
     return total;
   }
 
-  // Initial data point (before any events)
   const series: { date: string; netWorth: number }[] = [];
+  const today = new Date().toISOString().split("T")[0];
 
-  if (sorted.length === 0) {
-    // No events — just show the current net worth as a single point
-    const today = new Date().toISOString().split("T")[0];
+  if (sortedDesc.length === 0) {
     series.push({ date: today, netWorth: totalNW() });
     return series;
   }
 
-  // Walk events day by day
-  let currentDateStr = "";
-  sorted.forEach((event) => {
+  // Walk backwards from present day
+  let currentDateStr = today;
+  // This is the closing balance of today
+  series.push({ date: currentDateStr, netWorth: totalNW() });
+
+  sortedDesc.forEach((event) => {
     const eventDate = new Date(event.timestamp).toISOString().split("T")[0];
+    
+    // When we cross a date boundary, the CURRENT state of balances
+    // represents the closing balance of the older date.
+    if (eventDate !== currentDateStr) {
+      currentDateStr = eventDate;
+      series.push({ date: currentDateStr, netWorth: totalNW() });
+    }
+
     const { fromAccountId, toAccountId, amount } = resolveAccountColumns(event as any);
 
-    // Apply to balances
+    // REVERSE the transaction since we are walking backwards in time
     if (fromAccountId) {
-      const k = fromAccountId.trim().toLowerCase();
-      if (balances[k] !== undefined) balances[k] -= amount;
+      const k = aliasMap[fromAccountId.trim().toLowerCase()];
+      if (k && balances[k] !== undefined) balances[k] += amount;
     }
     if (toAccountId) {
-      const k = toAccountId.trim().toLowerCase();
-      if (balances[k] !== undefined) balances[k] += amount;
-    }
-
-    // Emit data point when the date changes (or at end)
-    if (eventDate !== currentDateStr) {
-      if (currentDateStr) {
-        // Close previous date
-        series.push({ date: currentDateStr, netWorth: totalNW() });
-      }
-      currentDateStr = eventDate;
+      const k = aliasMap[toAccountId.trim().toLowerCase()];
+      if (k && balances[k] !== undefined) balances[k] -= amount;
     }
   });
 
-  // Final date
-  if (currentDateStr) {
-    series.push({ date: currentDateStr, netWorth: totalNW() });
-  }
+  // After all events are reversed, `totalNW()` is the true initial balance before any events occurred.
+  const oldestDate = sortedDesc[sortedDesc.length - 1] 
+    ? new Date(sortedDesc[sortedDesc.length - 1].timestamp).toISOString().split("T")[0]
+    : today;
 
-  return series;
+  // Add the opening balance on the day before the oldest event
+  const openingDateObj = new Date(oldestDate);
+  openingDateObj.setDate(openingDateObj.getDate() - 1);
+  const openingDateStr = openingDateObj.toISOString().split("T")[0];
+  series.push({ date: openingDateStr, netWorth: totalNW() });
+
+  // Reverse it back to chronological order for the chart
+  return series.reverse();
 }
 
 // ── Custom Tooltip ──────────────────────────────────────────────────────────
@@ -176,7 +186,9 @@ function ChartTooltip({ active, payload, label }: any) {
       }}
     >
       <p className="font-bold text-[10px] uppercase tracking-wider mb-1" style={{ color: "var(--muted-foreground)" }}>
-        {label}
+        {payload[0]?.payload?.date
+          ? new Date(payload[0].payload.date + "T00:00:00").toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
+          : label}
       </p>
       <p className="text-sm font-extrabold">{formatNaira(payload[0].value)}</p>
     </div>
@@ -232,7 +244,7 @@ function CycleSelector({
 
 // ── Dashboard Content ───────────────────────────────────────────────────────
 function DashboardContent() {
-  const { accounts, events, activeCycleId, availableCycles, setActiveCycleId } = useAppData();
+  const { accounts, events, budgets, activeCycleId, availableCycles, setActiveCycleId } = useAppData();
   const { data: session } = useSession();
 
   // Net worth from reconciled accounts
@@ -255,6 +267,68 @@ function DashboardContent() {
     [cycleEvents]
   );
 
+  // 1. Top Spending Category
+  const topCategory = useMemo(() => {
+    const expensesByCategory: Record<string, number> = {};
+    cycleEvents.forEach(e => {
+      const type = String(e.eventType || e.type || "").toUpperCase();
+      if (["EXPENSERECORDED", "EXPENSE_RECORDED", "EXPENSE", "BANKCHARGERECORDED", "BANK_CHARGE"].includes(type)) {
+        const cat = (e as any).payload?.category || e.category || "Uncategorized";
+        const amt = Number(e.amount || (e as any).payload?.amount || 0);
+        expensesByCategory[cat] = (expensesByCategory[cat] || 0) + amt;
+      }
+    });
+    let topCat = "None";
+    let maxAmt = 0;
+    for (const [cat, amt] of Object.entries(expensesByCategory)) {
+      if (amt > maxAmt) {
+        maxAmt = amt;
+        topCat = cat;
+      }
+    }
+    return { name: topCat, amount: maxAmt };
+  }, [cycleEvents]);
+
+  // 2. Budget Utilization
+  const budgetUtilization = useMemo(() => {
+    const cycleBudgets = (budgets || []).filter(b => !b.deleted_at && String(b.cycleId || "").trim().toLowerCase() === String(activeCycleId || "").trim().toLowerCase());
+    const totalLimit = cycleBudgets.reduce((sum, b) => sum + Number(b.planned || 0), 0);
+    if (totalLimit === 0) return null; // No budget set
+    return (expenses / totalLimit) * 100;
+  }, [budgets, activeCycleId, expenses]);
+
+  // 3. Savings Rate
+  const savingsRate = useMemo(() => {
+    if (income === 0) return null;
+    return ((income - expenses) / income) * 100;
+  }, [income, expenses]);
+
+  // 4. Net Worth Change (MoM)
+  const netWorthChange = useMemo(() => {
+    const currentGrowth = income - expenses;
+    const currentCycleLower = String(activeCycleId || "").trim().toLowerCase();
+    const prevIdx = availableCycles.findIndex(c => c.toLowerCase() === currentCycleLower) + 1;
+    const prevCycleId = availableCycles[prevIdx];
+    
+    if (!prevCycleId) return null;
+
+    const prevCycleEvents = events.filter((e) => {
+        if (e.deleted_at) return false;
+        const eCycle = String(e.budgetCycleId || "").trim().toLowerCase();
+        return eCycle === prevCycleId.toLowerCase();
+    });
+    
+    const { income: prevIncome, expenses: prevExpenses } = calculateBudgetCycleSummary(prevCycleEvents as any);
+    const prevGrowth = prevIncome - prevExpenses;
+    
+    return {
+      currentGrowth,
+      prevGrowth,
+      delta: currentGrowth - prevGrowth,
+      percentDelta: prevGrowth !== 0 ? ((currentGrowth - prevGrowth) / Math.abs(prevGrowth)) * 100 : 0
+    };
+  }, [income, expenses, activeCycleId, availableCycles, events]);
+
   // Net worth time series
   const netWorthSeries = useMemo(
     () => computeNetWorthTimeSeries(events, accounts),
@@ -273,6 +347,11 @@ function DashboardContent() {
       })),
     [netWorthSeries]
   );
+
+  useEffect(() => {
+    // Expose globally for browser console debugging
+    (window as any)._DEBUG_CHART_DATA = chartData;
+  }, [chartData]);
 
   // User name from session
   const userName = session?.user?.name
@@ -328,9 +407,10 @@ function DashboardContent() {
 
         {/* Income (cycle) */}
         <div
-          className="flex-1 p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md"
+          className="flex-1 p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md relative overflow-hidden group"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
         >
+          <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-emerald-500/10 blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
           <p className="text-[11px] font-extrabold uppercase tracking-wider mb-2" style={{ color: "var(--muted-foreground)" }}>
             Income ({cycleLabel})
           </p>
@@ -345,9 +425,10 @@ function DashboardContent() {
 
         {/* Expenses (cycle) */}
         <div
-          className="flex-1 p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md"
+          className="flex-1 p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md relative overflow-hidden group"
           style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}
         >
+          <div className="absolute -right-6 -top-6 w-24 h-24 rounded-full bg-rose-500/10 blur-2xl pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity" />
           <p className="text-[11px] font-extrabold uppercase tracking-wider mb-2" style={{ color: "var(--muted-foreground)" }}>
             Expenses ({cycleLabel})
           </p>
@@ -358,6 +439,85 @@ function DashboardContent() {
             <span className="w-1.5 h-1.5 rounded-full bg-rose-500" />
             Cycle outflow
           </p>
+        </div>
+      </div>
+
+      {/* ── Four KPI Cards ── */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Top Spending Category */}
+        <div className="p-4 sm:p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider mb-2" style={{ color: "var(--muted-foreground)" }}>
+            Top Spending
+          </p>
+          <p className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: "var(--foreground)" }}>
+            {topCategory.name !== "None" ? formatNaira(topCategory.amount) : "N/A"}
+          </p>
+          <p className="text-xs font-bold mt-2 truncate" style={{ color: "var(--muted-foreground)" }}>
+            {topCategory.name !== "None" ? topCategory.name : "No expenses"}
+          </p>
+        </div>
+
+        {/* Budget Utilization */}
+        <div className="p-4 sm:p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider mb-2" style={{ color: "var(--muted-foreground)" }}>
+            Budget Used
+          </p>
+          <p className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: "var(--foreground)" }}>
+            {budgetUtilization === null ? "N/A" : `${budgetUtilization.toFixed(1)}%`}
+          </p>
+          <p className="text-xs font-bold mt-2 truncate" style={{ color: "var(--muted-foreground)" }}>
+            {budgetUtilization === null ? "No budget set" : "Of active cycle limits"}
+          </p>
+        </div>
+
+        {/* Savings Rate */}
+        <div className="p-4 sm:p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider mb-2" style={{ color: "var(--muted-foreground)" }}>
+            Savings Rate
+          </p>
+          <p className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: "var(--foreground)" }}>
+            {savingsRate === null ? "N/A" : `${savingsRate.toFixed(1)}%`}
+          </p>
+          <p className="text-xs font-bold mt-2 truncate" style={{ color: "var(--muted-foreground)" }}>
+            {savingsRate === null ? "No income this cycle" : "Income kept as savings"}
+          </p>
+        </div>
+
+        {/* Net Worth Change */}
+        <div className="p-4 sm:p-5 rounded-2xl border shadow-sm transition-all hover:shadow-md" style={{ backgroundColor: "var(--card)", borderColor: "var(--border)" }}>
+          <p className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider mb-2" style={{ color: "var(--muted-foreground)" }}>
+            Net Growth (MoM)
+          </p>
+          {netWorthChange === null ? (
+            <>
+              <p className="text-xl sm:text-2xl font-black tracking-tight" style={{ color: "var(--foreground)" }}>
+                N/A
+              </p>
+              <p className="text-xs font-bold mt-2 truncate" style={{ color: "var(--muted-foreground)" }}>
+                No previous cycle
+              </p>
+            </>
+          ) : (
+            <>
+              <p className={`text-xl sm:text-2xl font-black tracking-tight ${netWorthChange.currentGrowth >= 0 ? "text-emerald-500" : "text-rose-500"}`}>
+                {netWorthChange.currentGrowth >= 0 ? "+" : ""}{formatNaira(netWorthChange.currentGrowth)}
+              </p>
+              <p className="text-xs font-bold mt-2 flex items-center gap-1" style={{ color: "var(--muted-foreground)" }}>
+                {netWorthChange.percentDelta === 0 ? null : (
+                  <svg
+                    className={`w-3 h-3 ${netWorthChange.percentDelta > 0 ? "text-emerald-500" : "text-rose-500"}`}
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    style={{ transform: netWorthChange.percentDelta > 0 ? "rotate(0deg)" : "rotate(180deg)" }}
+                  >
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M5 10l7-7m0 0l7 7m-7-7v18" />
+                  </svg>
+                )}
+                {netWorthChange.percentDelta > 0 ? "+" : ""}{netWorthChange.percentDelta.toFixed(1)}% vs prev
+              </p>
+            </>
+          )}
         </div>
       </div>
 
@@ -377,7 +537,7 @@ function DashboardContent() {
                 <defs>
                   <linearGradient id="nwGradient" x1="0" y1="0" x2="0" y2="1">
                     <stop offset="0%" stopColor="#7C3AED" stopOpacity={0.4} />
-                    <stop offset="95%" stopColor="#7C3AED" stopOpacity={0.02} />
+                    <stop offset="100%" stopColor="#7C3AED" stopOpacity={0.0} />
                   </linearGradient>
                 </defs>
                 <CartesianGrid
@@ -393,6 +553,7 @@ function DashboardContent() {
                   dy={8}
                 />
                 <YAxis
+                  domain={['auto', 'auto']}
                   tickFormatter={(v: number) => abbreviateNaira(v)}
                   tick={{ fill: "var(--muted-foreground)", fontSize: 11, fontWeight: 600 }}
                   axisLine={false}

@@ -2,6 +2,7 @@
 
 import React, { useEffect } from "react";
 import { useDebouncedUsernameCheck, UsernameStatus } from "@/hooks/useDebouncedUsernameCheck";
+import { Tooltip } from "@/components/ui/tooltip";
 
 export interface UsernameInputProps {
   initialUsername?: string;
@@ -60,17 +61,18 @@ export function UsernameInput({
         }}
       >
         {/* Fixed Cashtag Prefix Container */}
-        <div
-          className="flex items-center justify-center px-3.5 py-2.5 font-extrabold text-sm border-r select-none"
-          style={{
-            backgroundColor: "var(--card)",
-            color: "var(--foreground)",
-            borderColor: "var(--border)",
-          }}
-          title="Cashtag Handle Prefix ($)"
-        >
-          $
-        </div>
+        <Tooltip content="Cashtag Handle Prefix ($)" placement="top">
+          <div
+            className="flex items-center justify-center px-3.5 py-2.5 font-extrabold text-sm border-r select-none h-full"
+            style={{
+              backgroundColor: "var(--card)",
+              color: "var(--foreground)",
+              borderColor: "var(--border)",
+            }}
+          >
+            $
+          </div>
+        </Tooltip>
 
         {/* Alphanumeric Handle Input Field */}
         <input

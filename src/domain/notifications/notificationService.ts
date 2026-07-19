@@ -65,8 +65,8 @@ export async function sendEmailNotification(payload: NotificationPayload): Promi
 
   console.log(`[Notification Engine] Dispatching '${payload.type}' email to ${payload.to} via ${brevoKey ? "Brevo Cloud API" : resendKey ? "Resend Cloud API" : smtpHost ? "SMTP Relay" : "Simulated Local Dispatcher"}`);
 
-  // Always log OTP verification codes to local console so developer/user is never locked out
-  if (payload.type === "otp_verification" && payload.data?.otpCode) {
+  // Always log OTP verification codes to local console in dev mode so developer is never locked out
+  if (process.env.NODE_ENV !== "production" && payload.type === "otp_verification" && payload.data?.otpCode) {
     console.log(`\n======================================================`);
     console.log(`🔐 [FINANCEOS OTP VERIFICATION CODE] To: ${payload.to}`);
     console.log(`👉 Verification Code: ${payload.data.otpCode}`);

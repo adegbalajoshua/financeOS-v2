@@ -91,6 +91,12 @@ interface AppContextType {
   importCsvData: (newEvents: EventRecord[]) => Promise<{ success: boolean; count?: number; error?: string }>;
   batchSetupWorkspace: (args: { newAccounts: Omit<AccountRecord, "id">[]; newBudgets: Omit<BudgetRecord, "id">[] }) => Promise<boolean>;
   logoutAndClearCache: () => Promise<void>;
+
+  // UI State
+  isComposerOpen: boolean;
+  setIsComposerOpen: (open: boolean) => void;
+  editingEventId: string | null;
+  setEditingEventId: (id: string | null) => void;
 }
 
 const AVAILABLE_CYCLES = ["Jul-26", "Aug-26", "Sep-26", "Oct-26", "Nov-26", "Dec-26", "Jan-27"];
@@ -158,6 +164,11 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
   const [events, setEvents] = useState<EventRecord[]>(INITIAL_EVENTS);
   const [accounts, setAccounts] = useState<AccountRecord[]>(INITIAL_ACCOUNTS);
   const [budgets, setBudgets] = useState<BudgetRecord[]>(INITIAL_BUDGETS);
+  
+  // UI State
+  const [isComposerOpen, setIsComposerOpen] = useState(false);
+  const [editingEventId, setEditingEventId] = useState<string | null>(null);
+
   const accountsRef = useRef<AccountRecord[]>(INITIAL_ACCOUNTS);
   const budgetsRef = useRef<BudgetRecord[]>(INITIAL_BUDGETS);
   const eventsRef = useRef<EventRecord[]>(INITIAL_EVENTS);
@@ -949,6 +960,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         importCsvData,
         batchSetupWorkspace,
         logoutAndClearCache,
+        isComposerOpen,
+        setIsComposerOpen,
+        editingEventId,
+        setEditingEventId,
       }}
     >
       {children}

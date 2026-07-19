@@ -8,6 +8,7 @@ import { useAppData } from "@/lib/appContext";
 import { formatCycleLabel } from "@/lib/formatCycle";
 import { calculateNetWorth } from "@/domain/financeEngine/engine";
 import Link from "next/link";
+import { Tooltip as UITooltip } from "@/components/ui/tooltip";
 
 const EVENT_META: Record<string, { label: string; color: string; dot: string; icon: string }> = {
   INCOME_RECEIVED:      { label: "Income",     color: "#10b981", dot: "#10b981", icon: "💰" },
@@ -46,11 +47,9 @@ function formatDate(iso: string) {
 }
 
 export function TimelineView() {
-  const [isComposerOpen, setIsComposerOpen] = useState(false);
-  const [editingEvent, setEditingEvent] = useState<any>(null);
   const [activeFilter, setActiveFilter] = useState("ALL");
   const [searchQuery, setSearchQuery] = useState("");
-  const { events, accounts, budgets, isSyncing, refreshData, isConnected, activeCycleId, deleteEvent } = useAppData();
+  const { events, accounts, budgets, isSyncing, refreshData, isConnected, activeCycleId, deleteEvent, setIsComposerOpen, setEditingEventId } = useAppData();
 
   // Filter events based on selected tab, search query, and active budget cycle
   const cycleEvents = events.filter((e) => {
@@ -192,16 +191,17 @@ export function TimelineView() {
 
               <div className="flex items-center gap-2.5">
                 {isConnected && (
-                  <button
-                    onClick={() => refreshData()}
-                    disabled={isSyncing}
-                    className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all disabled:opacity-50 hover:bg-muted"
-                    style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
-                    title="Refresh data records"
-                  >
-                    <span className={`w-2 h-2 rounded-full ${isSyncing ? "bg-amber-400 animate-spin" : "bg-emerald-500"}`} />
-                    <span>{isSyncing ? "Updating..." : "Refresh"}</span>
-                  </button>
+                  <UITooltip content="Refresh data records" placement="top">
+                    <button
+                      onClick={() => refreshData()}
+                      disabled={isSyncing}
+                      className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold border transition-all disabled:opacity-50 hover:bg-muted"
+                      style={{ borderColor: "var(--border)", color: "var(--muted-foreground)" }}
+                    >
+                      <span className={`w-2 h-2 rounded-full ${isSyncing ? "bg-amber-400 animate-spin" : "bg-emerald-500"}`} />
+                      <span>{isSyncing ? "Updating..." : "Refresh"}</span>
+                    </button>
+                  </UITooltip>
                 )}
                 <button
                   onClick={() => setIsComposerOpen(true)}
@@ -267,10 +267,7 @@ export function TimelineView() {
             </div>
           </div>
 
-          {/* Event Composer & Edit Modals */}
-          {isComposerOpen && <EventComposer onClose={() => setIsComposerOpen(false)} />}
-          {editingEvent && <EventEditModal event={editingEvent} onClose={() => setEditingEvent(null)} />}
-
+          {/* Event Composer & Edit Modals (Lifted to Global AppShell) */}
           {/* Transaction Ledger Feed (`Sleek Horizontal Cards`) */}
           {filteredEvents.length === 0 ? (
             <div
@@ -382,26 +379,28 @@ export function TimelineView() {
 
                       {/* Quick Hover Actions */}
                       <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity mt-2">
-                        <button
-                          type="button"
-                          onClick={() => setEditingEvent(event)}
-                          title="Edit transaction"
-                          className="px-2 py-1 rounded-lg bg-muted hover:bg-[#635BFF]/15 text-[11px] font-bold text-[#635BFF] transition-colors flex items-center gap-1 border border-border"
-                        >
-                          <span>✏️ Edit</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            if (confirm(`Delete transaction "${event.category || event.description || "item"}" (${formatCurrency(event.amount)})?`)) {
-                              await deleteEvent(event.id || event.eventId || "");
-                            }
-                          }}
-                          title="Delete transaction"
-                          className="px-2 py-1 rounded-lg bg-muted hover:bg-red-500/15 text-[11px] font-bold text-red-500 transition-colors flex items-center gap-1 border border-border"
-                        >
-                          <span>🗑️</span>
-                        </button>
+                        <UITooltip content="Edit transaction" placement="top">
+                          <button
+                            type="button"
+                            onClick={() => setEditingEventId(event.id)}
+                            className="px-2 py-1 rounded-lg bg-muted hover:bg-[#635BFF]/15 text-[11px] font-bold text-[#635BFF] transition-colors flex items-center gap-1 border border-border"
+                          >
+                            <span>✏️ Edit</span>
+                          </button>
+                        </UITooltip>
+                        <UITooltip content="Delete transaction" placement="top">
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              if (confirm(`Delete transaction "${event.category || event.description || "item"}" (${formatCurrency(event.amount)})?`)) {
+                                await deleteEvent(event.id || event.eventId || "");
+                              }
+                            }}
+                            className="px-2 py-1 rounded-lg bg-muted hover:bg-red-500/15 text-[11px] font-bold text-red-500 transition-colors flex items-center gap-1 border border-border"
+                          >
+                            <span>🗑️</span>
+                          </button>
+                        </UITooltip>
                       </div>
                     </div>
                   </div>

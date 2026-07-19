@@ -4,8 +4,14 @@
 
 @custom-variant dark (&:is(.dark *));
 
+@font-face {
+  font-family: 'NairaFallback';
+  src: local('Arial'), local('Helvetica'), local('sans-serif');
+  unicode-range: U+20A6;
+}
+
 @theme inline {
-  --font-sans: var(--font-inter);
+  --font-sans: 'NairaFallback', var(--font-inter);
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-primary: var(--primary);

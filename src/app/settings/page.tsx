@@ -4,6 +4,7 @@ import React, { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { useAppData } from "@/lib/appContext";
 import { CsvImportTool } from "@/components/CsvImportTool";
+import { DataExportTool } from "@/components/DataExportTool";
 import { UsernameInput } from "@/components/UsernameInput";
 import { UsernameStatus } from "@/hooks/useDebouncedUsernameCheck";
 
@@ -146,6 +147,10 @@ export default function SettingsPage() {
   );
 
   const handleSave = async () => {
+    if (!displayName || displayName.trim().length === 0) {
+      alert("❌ Display Name cannot be empty.");
+      return;
+    }
     if (usernameStatus === "taken") {
       alert("❌ Sorry, that username is already taken. Please pick another one before saving.");
       return;
@@ -347,7 +352,8 @@ export default function SettingsPage() {
                   </button>
                 </div>
 
-                <div className="pt-4 border-t" style={{ borderColor: "var(--border)" }}>
+                <div className="pt-4 border-t space-y-6" style={{ borderColor: "var(--border)" }}>
+                  <DataExportTool />
                   <CsvImportTool />
                 </div>
               </div>

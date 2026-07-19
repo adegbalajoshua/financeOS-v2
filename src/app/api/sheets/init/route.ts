@@ -6,7 +6,7 @@ export async function POST(request: Request) {
     const session: any = await auth();
     if (!session || !session.accessToken) {
       return NextResponse.json(
-        { status: "error", message: "Unauthorized. Please sign in with Google first." },
+        { status: "error", message: "Unauthorized. Please sign in first." },
         { status: 401 }
       );
     }

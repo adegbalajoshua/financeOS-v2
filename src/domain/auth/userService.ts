@@ -350,7 +350,7 @@ export async function markUserOnboardingComplete(email: string, customCreds?: Su
 }
 
 /**
- * Sets or updates a password hash for an existing user (such as migrating from Google OAuth or password reset).
+ * Sets or updates a password hash for an existing user (such as migrating from legacy system or password reset).
  */
 export async function setUserPassword(email: string, newPasswordPlain: string, customCreds?: SupabaseCredentials | null): Promise<boolean> {
   const normalizedEmail = email.toLowerCase().trim();

@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useSession, signIn, signOut } from "next-auth/react";
 import { useAppData } from "@/lib/appContext";
 import { CsvImportTool } from "@/components/CsvImportTool";
+import Link from "next/link";
 
 export function OnboardingBanner() {
   const { data: session, status } = useSession();
@@ -120,19 +121,12 @@ export function OnboardingBanner() {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 flex-shrink-0 w-full lg:w-auto">
           {!isLoggedIn ? (
             <>
-              <button
-                onClick={() => {
-                  if (typeof window !== "undefined" && window.location.hostname === "0.0.0.0") {
-                    const port = window.location.port || "3000";
-                    window.location.href = `http://localhost:${port}/login?auto_google=true`;
-                    return;
-                  }
-                  signIn("google", { callbackUrl: "/auth/resolve" });
-                }}
+              <Link
+                href="/login"
                 className="px-6 py-3 bg-[#635BFF] hover:bg-[#5851e5] text-white rounded-xl text-xs font-bold transition-all shadow-[0_4px_14px_rgba(99,91,255,0.4)] active:scale-95 flex items-center justify-center gap-2.5"
               >
                 Sign In to Access Account
-              </button>
+              </Link>
               <button
                 onClick={() => setDemoDismissed(true)}
                 className="px-4 py-3 rounded-xl text-xs font-bold border transition-all hover:opacity-80 text-center"
