@@ -38,6 +38,8 @@ describe("Frontend Failure Paths", () => {
       syncToSupabase: mockSyncToSupabase,
       importCsvData: mockImportCsvData,
       activeCycleId: "Jul-26",
+      availableCycles: ["Jul-26"],
+      setActiveCycleId: vi.fn(),
       events: [],
       accounts: [],
       budgets: [],

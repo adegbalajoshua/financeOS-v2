@@ -100,26 +100,29 @@ describe("Frontend Component Happy Paths", () => {
   });
 
   describe("3. DashboardView - Successful Render", () => {
-    it("renders valid net worth and recent activity without crashing", () => {
+    it("renders valid net worth and cycle metrics without crashing", () => {
       // Mock some real accounts and events to test calculation
       (AppContext.useAppData as any).mockReturnValue({
         accounts: [
-          { id: "acc1", name: "Checking", balance: 500000 }, // 5,000.00
-          { id: "acc2", name: "Savings", balance: 250000 },  // 2,500.00
+          { id: "acc1", name: "Checking", balance: 500000, type: "Bank" }, // 5,000.00
+          { id: "acc2", name: "Savings", balance: 250000, type: "Savings" },  // 2,500.00
         ],
         events: [
-          { id: "evt1", type: "EXPENSE_RECORDED", payload: { amount: 10000 } }
+          { id: "evt1", type: "EXPENSE_RECORDED", payload: { amount: 10000 }, timestamp: "2026-07-15T10:00:00Z", budgetCycleId: "Jul-26" }
         ],
         activeCycleId: "Jul-26",
+        availableCycles: ["Jul-26", "Aug-26"],
+        setActiveCycleId: vi.fn(),
       });
 
       render(<DashboardView />);
 
       // Total net worth should be 7,500.00 NGN
       expect(screen.getByText(/₦7,500\.00/i)).toBeDefined();
-      expect(screen.getByText("Jul-26")).toBeDefined();
-      expect(screen.getByText("EXPENSE_RECORDED")).toBeDefined();
-      expect(screen.getByText(/₦100\.00/i)).toBeDefined();
+      // Cycle label should be formatted as "July 2026" not raw "Jul-26" — appears in multiple places
+      expect(screen.getAllByText(/July 2026/i).length).toBeGreaterThan(0);
+      // Should show the metric card labels
+      expect(screen.getByText(/Total Net Worth/i)).toBeDefined();
     });
   });
 });

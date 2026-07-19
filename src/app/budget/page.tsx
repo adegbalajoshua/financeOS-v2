@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { useAppData } from "@/lib/appContext";
+import { formatCycleLabel } from "@/lib/formatCycle";
 
 const CATEGORY_COLORS = ["#635BFF", "#0ea5e9", "#f59e0b", "#10b981", "#6366f1", "#ec4899", "#14b8a6"];
 
@@ -104,10 +105,10 @@ export default function BudgetPage() {
           <div className="flex items-center justify-between">
             <div>
               <h1 className="text-2xl font-bold tracking-tight" style={{ color: "var(--foreground)" }}>
-                Budget & Goals ({activeCycleId || "Jul-26"})
+                Budget & Goals ({formatCycleLabel(activeCycleId || "Jul-26")})
               </h1>
               <p className="text-sm font-medium mt-1" style={{ color: "var(--muted-foreground)" }}>
-                {activeCycleId || "Jul-26"} — Monthly spending targets & savings goals.
+                {formatCycleLabel(activeCycleId || "Jul-26")} — Monthly spending targets & savings goals.
               </p>
             </div>
             <button
@@ -420,7 +421,7 @@ export default function BudgetPage() {
             <div className="flex items-center justify-between mb-4">
               <span className="text-xs font-bold uppercase tracking-wider text-white/70">Monthly Spending Rate</span>
               <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-[#635BFF]/30 text-[#A5A1FF] border border-[#635BFF]/30">
-                {activeCycleId || "Jul-26"}
+                {formatCycleLabel(activeCycleId || "Jul-26")}
               </span>
             </div>
             <p className="text-3xl font-extrabold tracking-tight mb-1">{operatingPct}% <span className="text-sm font-normal text-white/60">Used</span></p>

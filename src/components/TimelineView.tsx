@@ -5,6 +5,7 @@ import { PieChart, Pie, Cell, Tooltip, ResponsiveContainer } from "recharts";
 import { EventComposer } from "./EventComposer";
 import { EventEditModal } from "./EventEditModal";
 import { useAppData } from "@/lib/appContext";
+import { formatCycleLabel } from "@/lib/formatCycle";
 import { calculateNetWorth } from "@/domain/financeEngine/engine";
 import Link from "next/link";
 
@@ -113,7 +114,7 @@ export function TimelineView() {
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              <span>Income ({activeCycleId || "Jul-26"})</span>
+              <span>Income ({formatCycleLabel(activeCycleId || "Jul-26")})</span>
             </p>
             <p className="text-xl sm:text-2xl font-black text-emerald-500 mt-1 tracking-tight">
               + {formatCurrency(cycleInflow)}
@@ -132,7 +133,7 @@ export function TimelineView() {
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-rose-500" />
-              <span>Expenses ({activeCycleId || "Jul-26"})</span>
+              <span>Expenses ({formatCycleLabel(activeCycleId || "Jul-26")})</span>
             </p>
             <p className="text-xl sm:text-2xl font-black text-rose-500 mt-1 tracking-tight">
               - {formatCurrency(cycleOutflow)}
@@ -152,7 +153,7 @@ export function TimelineView() {
           <div>
             <p className="text-[11px] font-extrabold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
               <span className="w-2 h-2 rounded-full bg-[#635BFF]" />
-              <span>Net Saved ({activeCycleId || "Jul-26"})</span>
+              <span>Net Saved ({formatCycleLabel(activeCycleId || "Jul-26")})</span>
             </p>
             <p className={`text-xl sm:text-2xl font-black mt-1 tracking-tight ${netDelta >= 0 ? "text-[#635BFF]" : "text-amber-500"}`}>
               {netDelta >= 0 ? "+" : ""} {formatCurrency(netDelta)}
