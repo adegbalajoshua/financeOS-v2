@@ -49,10 +49,11 @@ export async function POST(req: NextRequest) {
         updatePayload.username = normalizedUsername;
       }
 
-      const { error } = await client
+      const { data, error } = await client
         .from("finance_users")
         .update(updatePayload)
-        .eq("email", email);
+        .eq("email", email)
+        .select();
 
       if (error) {
         if (
@@ -63,6 +64,31 @@ export async function POST(req: NextRequest) {
           return NextResponse.json({ error: "Sorry, the username $" + normalizedUsername + " is already taken by another user." }, { status: 409 });
         }
         console.error("Failed to update profile in Supabase:", error.message);
+        return NextResponse.json({ error: "Database error: " + error.message }, { status: 500 });
+      }
+
+      if (!data || data.length === 0) {
+        // If data is empty, the row wasn't updated (likely RLS blocked it or email not found)
+        console.error("Profile update affected 0 rows. RLS or missing user.");
+        
+        // Fallback: Try with an explicit admin client using service_role key to bypass RLS
+        const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+        const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+        if (adminKey && url) {
+          const { createClient } = require("@supabase/supabase-js");
+          const adminClient = createClient(url, adminKey);
+          const { data: adminData, error: adminError } = await adminClient
+            .from("finance_users")
+            .update(updatePayload)
+            .eq("email", email)
+            .select();
+            
+          if (adminError || !adminData || adminData.length === 0) {
+            return NextResponse.json({ error: "Failed to update profile records (Admin bypass failed)." }, { status: 500 });
+          }
+        } else {
+          return NextResponse.json({ error: "Failed to update profile records (0 rows affected)." }, { status: 500 });
+        }
       }
     }
 

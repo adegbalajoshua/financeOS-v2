@@ -11,7 +11,9 @@ import {
   getBudgetsFromLocalDb,
   clearLocalDb,
 } from "@/infrastructure/local-db/db";
-import { reconcileAccount, generateBudgetReport } from "@/domain/financeEngine/engine";
+import { logger } from "@/lib/logger";
+import { logActivity } from "@/lib/activityLogger";
+import { reconcileAccount, generateBudgetReport, calculateFinancialSnapshot } from "@/domain/financeEngine/engine";
 import { FinancialEvent } from "@/domain/entities/types";
 
 export interface EventRecord {
@@ -432,6 +434,13 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
         ? `?url=${encodeURIComponent(supabaseCreds.url)}&key=${encodeURIComponent(supabaseCreds.key)}`
         : "";
       const res = await fetch(`/api/supabase/sync${queryParams}`);
+      
+      // If the middleware intercepted this and redirected us to the login page
+      if (res.redirected || !res.headers.get("content-type")?.includes("application/json")) {
+        console.warn("Sync endpoint returned HTML or redirected (likely unauthenticated).");
+        return { success: false, hasData: false, eventsCount: 0, accountsCount: 0 };
+      }
+
       if (res.ok) {
         const data = await res.json();
 
@@ -569,7 +578,10 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
       localStorage.removeItem("financeos_local_budgets");
       localStorage.removeItem("financeos_onboarding_completed");
       localStorage.removeItem("financeos_last_logged_in_user");
+      localStorage.removeItem("financeos_supabase_url");
+      localStorage.removeItem("financeos_supabase_key");
       localStorage.setItem("financeos_logged_out", "true");
+      logActivity("auth", "User logged out");
       setEvents(INITIAL_EVENTS);
       setAccounts(INITIAL_ACCOUNTS);
       setBudgets(INITIAL_BUDGETS);
@@ -722,6 +734,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected) {
       handleSyncAfterMutation();
     }
+    
+    logActivity("transaction", "Transaction added", { 
+      eventId: newEvent.id, 
+      type: newEvent.type, 
+      amount: newEvent.amount, 
+      category: newEvent.category, 
+      accountName: newEvent.accountName 
+    });
+
     return true;
   };
 
@@ -759,6 +780,15 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected) {
       handleSyncAfterMutation();
     }
+    
+    logActivity("transaction", "Transaction edited", { 
+      eventId: updated.id, 
+      type: updated.type, 
+      amount: updated.amount, 
+      category: updated.category, 
+      accountName: updated.accountName 
+    });
+
     return true;
   };
 
@@ -785,6 +815,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected) {
       handleSyncAfterMutation();
     }
+    
+    logActivity("transaction", "Transaction deleted", { eventId: id });
+
     return true;
   };
 
@@ -807,6 +840,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected && localStorage.getItem("financeos_practice_mode") !== "true") {
       handleSyncAfterMutation();
     }
+
+    logActivity("account", "Account added", { accountId: newAccount.id, name: newAccount.name, type: newAccount.type });
+
     return true;
   };
 
@@ -841,6 +877,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected && localStorage.getItem("financeos_practice_mode") !== "true") {
       handleSyncAfterMutation();
     }
+    
+    logActivity("account", "Account edited", { accountId: id });
+
     return true;
   };
 
@@ -858,6 +897,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected && localStorage.getItem("financeos_practice_mode") !== "true") {
       handleSyncAfterMutation();
     }
+    
+    logActivity("account", "Account deleted", { accountId: id });
+
     return true;
   };
 
@@ -876,6 +918,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected && localStorage.getItem("financeos_practice_mode") !== "true") {
       handleSyncAfterMutation();
     }
+    
+    logActivity("budget", "Budget added", { budgetId: newBudget.id, category: newBudget.category, planned: newBudget.planned });
+
     return true;
   };
 
@@ -893,6 +938,9 @@ export function AppDataProvider({ children }: { children: React.ReactNode }) {
     if (isConnected && localStorage.getItem("financeos_practice_mode") !== "true") {
       handleSyncAfterMutation();
     }
+
+    logActivity("budget", "Budget deleted", { budgetId: id });
+
     return true;
   };
 

@@ -2,6 +2,21 @@ import { sendEmailNotification } from "@/domain/notifications/notificationServic
 import { getSupabaseClient, OtpSupabaseService } from "@/infrastructure/supabase/client";
 import { logger } from "@/lib/logger";
 
+async function logSecurityEvent(eventType: string, email: string, metadata: any = {}) {
+  try {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      await supabase.from("finance_security_audit").insert({
+        event_type: eventType,
+        email,
+        metadata,
+      });
+    }
+  } catch (err) {
+    logger.debug(`Failed to log security event ${eventType}:`, { error: String(err) });
+  }
+}
+
 interface OtpRecord {
   email: string;
   code: string;
@@ -56,6 +71,8 @@ export async function sendOtpVerification(email: string): Promise<{ success: boo
   } catch (err: any) {
     logger.debug("Supabase verification code table sync skipped:", { message: err?.message });
   }
+
+  await logSecurityEvent("OTP_SENT", normalizedEmail, { expiresAt });
 
   // Dispatch via Email engine (Resend if key configured, or local simulated trace)
   const res = await sendEmailNotification({
@@ -133,8 +150,10 @@ export async function verifyOtpCode(email: string, inputCode: string): Promise<{
           await otpSvc.deleteOtp(normalizedEmail);
         }
       } catch (err) {}
+      await logSecurityEvent("OTP_LOCKOUT", normalizedEmail, { attempts: record.attempts, reason: "Max failures reached" });
       return { success: false, error: "Too many failed attempts. This code has been invalidated. Please request a new one." };
     }
+    await logSecurityEvent("OTP_FAILED_ATTEMPT", normalizedEmail, { attempts: record.attempts, remaining: 5 - record.attempts });
     return { success: false, error: `Invalid verification code. ${5 - record.attempts} attempts remaining.` };
   }
 
@@ -147,6 +166,8 @@ export async function verifyOtpCode(email: string, inputCode: string): Promise<{
       await otpSvc.markOtpVerified(normalizedEmail);
     }
   } catch (err) {}
+
+  await logSecurityEvent("OTP_VERIFIED", normalizedEmail);
 
   return { success: true };
 }

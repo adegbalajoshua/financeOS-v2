@@ -59,6 +59,43 @@ class StructuredLogger {
 
   error(message: string, context?: Record<string, any>, error?: any) {
     console.error(this.formatMessage("error", message, context, error));
+
+    if (typeof window === "undefined") {
+      // Fire-and-forget server-side error logging to Supabase
+      (async () => {
+        try {
+          const { sanitizeLogPayload } = await import("@/lib/loggerSanitizer");
+          const adminKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+          const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+          
+          if (adminKey && url) {
+            const { createClient } = await import("@supabase/supabase-js");
+            const adminClient = createClient(url, adminKey);
+            
+            const email = context?.email || context?.user_email || undefined;
+            const payload = {
+              context,
+              error: error instanceof Error ? { message: error.message, stack: error.stack } : error
+            };
+
+            const scrubbed = sanitizeLogPayload(payload);
+
+            const { error: dbError } = await adminClient.from("app_event_log").insert({
+              log_type: "error",
+              category: "server_error",
+              message: message.substring(0, 1000),
+              metadata: scrubbed,
+              user_email: email
+            });
+            
+            if (dbError) throw dbError;
+          }
+        } catch (e) {
+          // Silent fallback to prevent infinite loops
+          console.error("CRITICAL: Failed to write to app_event_log", e);
+        }
+      })();
+    }
   }
 
   logErrorWithId(message: string, context?: Record<string, any>, error?: any): string {

@@ -3,6 +3,7 @@ import { Inter } from "next/font/google";
 import Script from "next/script";
 import { AppShell } from "@/components/AppShell";
 import { Providers } from "@/components/Providers";
+import { GlobalErrorLogger } from "@/components/GlobalErrorLogger";
 import "./globals.css";
 
 const inter = Inter({
@@ -43,6 +44,7 @@ export default function RootLayout({
       </head>
       <body className="min-h-full font-sans">
         <Providers>
+          <GlobalErrorLogger />
           <AppShell>{children}</AppShell>
         </Providers>
       </body>

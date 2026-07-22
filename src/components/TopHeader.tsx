@@ -19,7 +19,7 @@ function formatNaira(kobo: number): string {
 }
 
 export function TopHeader() {
-  const { syncToSupabase, isSyncing, rejectedSyncCount, events, accounts, budgets, activeCycleId, setIsComposerOpen, setEditingEventId } = useAppData();
+  const { syncToSupabase, isSyncing, rejectedSyncCount, events, accounts, budgets, activeCycleId, setIsComposerOpen, setEditingEventId, logoutAndClearCache } = useAppData();
   const [syncFailed, setSyncFailed] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
   const { data: session } = useSession();
@@ -249,7 +249,15 @@ export function TopHeader() {
                     {searchResults.events.map(ev => (
                       <div 
                         key={ev.id} 
+                        role="button"
+                        tabIndex={0}
                         onClick={() => { setIsSearchFocused(false); setSearchQuery(""); setEditingEventId(ev.id); }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault();
+                            setIsSearchFocused(false); setSearchQuery(""); setEditingEventId(ev.id);
+                          }
+                        }}
                         className="flex items-center justify-between px-4 py-2 hover:bg-zinc-50 dark:hover:bg-zinc-800/50 cursor-pointer"
                       >
                         <div className="flex flex-col">
@@ -364,7 +372,7 @@ export function TopHeader() {
                 <Settings className="w-4 h-4" />
                 Settings
               </Link>
-              <button onClick={() => { setDropdownOpen(false); signOut(); }} className="flex items-center gap-2 px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors w-full text-left">
+              <button onClick={async () => { setDropdownOpen(false); await logoutAndClearCache(); signOut({ callbackUrl: "/login" }); }} className="flex items-center gap-2 px-4 py-2 text-sm text-rose-600 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors w-full text-left">
                 <LogOut className="w-4 h-4" />
                 Sign out
               </button>

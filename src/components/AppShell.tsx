@@ -518,24 +518,39 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
               {/* User session info */}
               {status === "authenticated" && session?.user ? (
-                <Link
-                  href="/settings"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all hover:bg-white/[0.04] group border border-transparent hover:border-border"
-                >
-                  <div className="w-7 h-7 rounded-full bg-[#635BFF]/20 border border-[#635BFF]/40 flex items-center justify-center flex-shrink-0 text-[#635BFF] font-bold text-[11px]">
-                    {session.user.name?.slice(0, 2).toUpperCase() || "JA"}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <p className="text-xs font-bold truncate group-hover:text-[#635BFF] transition-colors" style={{ color: "var(--foreground)" }}>
-                      {session.user.name || "My Profile"}
-                    </p>
-                    <p className="text-[10px] truncate text-emerald-500 font-mono flex items-center gap-1">
-                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
-                      <span>Auto-Saved</span>
-                    </p>
-                  </div>
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    href="/settings"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex-1 flex items-center gap-2.5 px-3 py-2 rounded-xl transition-all hover:bg-white/[0.04] group border border-transparent hover:border-border"
+                  >
+                    <div className="w-7 h-7 rounded-full bg-[#635BFF]/20 border border-[#635BFF]/40 flex items-center justify-center flex-shrink-0 text-[#635BFF] font-bold text-[11px]">
+                      {session.user.name?.slice(0, 2).toUpperCase() || "JA"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold truncate group-hover:text-[#635BFF] transition-colors" style={{ color: "var(--foreground)" }}>
+                        {session.user.name || "My Profile"}
+                      </p>
+                      <p className="text-[10px] truncate text-emerald-500 font-mono flex items-center gap-1">
+                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                        <span>Auto-Saved</span>
+                      </p>
+                    </div>
+                  </Link>
+                  <button
+                    onClick={async () => {
+                      setMobileOpen(false);
+                      await logoutAndClearCache();
+                      signOut({ callbackUrl: "/login" });
+                    }}
+                    className="p-2.5 rounded-xl text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-500/10 transition-colors"
+                    title="Sign out"
+                  >
+                    <svg className="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                    </svg>
+                  </button>
+                </div>
               ) : (
                 <Link
                   href="/login"

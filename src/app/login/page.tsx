@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from "react";
 import { signIn } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { logActivity } from "@/lib/activityLogger";
 import {
   validateEmail,
   validatePassword,
@@ -229,13 +230,15 @@ export default function LoginPage() {
           if (fnClean) localStorage.setItem("financeos_first_name", fnClean);
           localStorage.setItem("financeos_display_name", computedName);
         }
+        
+        logActivity("auth", "New user registered", { email, username: targetUsername });
 
         const otpRes = await fetch("/api/auth/otp/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email }),
         });
-        
+
         if (!otpRes.ok) {
           const otpErr = await otpRes.json().catch(() => ({}));
           throw new Error(otpErr.error || "Failed to dispatch verification email.");
@@ -300,6 +303,7 @@ export default function LoginPage() {
         throw new Error("Invalid Email/Username or Password.");
       }
 
+      logActivity("auth", "User logged in", { identifier: targetIdentifier });
       router.push("/auth/resolve");
     } catch (err: any) {
       setErrorMsg(err.message || "Sign in failed.");
@@ -466,7 +470,7 @@ export default function LoginPage() {
             <div className="w-6 h-6 rounded-lg bg-gradient-to-br from-[#635BFF] to-indigo-600 flex items-center justify-center shadow-lg border border-white/20">
               <span className="text-white font-black text-[10px]">F</span>
             </div>
-            <span className="text-[10px] font-mono tracking-widest text-white/50 uppercase">financeOS</span>
+            <span className="text-[12px] font-mono tracking-widest text-white/50">financeOS</span>
           </div>
           <h1 className="text-2xl font-black text-white tracking-tight">Access Dashboard</h1>
           <p className="text-sm font-medium text-white/50">Your private financial sanctuary.</p>
@@ -522,8 +526,9 @@ export default function LoginPage() {
                 {authMode === "signin" ? (
                   <>
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">Email or Username</label>
+                      <label htmlFor="loginIdentifier" className="text-[11px] font-bold uppercase tracking-wider text-white/60">Email or Username</label>
                       <input
+                        id="loginIdentifier"
                         type="text"
                         value={identifier || email}
                         onChange={(e) => { setIdentifier(e.target.value); setEmail(e.target.value); }}
@@ -535,8 +540,9 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">Password</label>
+                      <label htmlFor="loginPassword" className="text-[11px] font-bold uppercase tracking-wider text-white/60">Password</label>
                       <input
+                        id="loginPassword"
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -569,8 +575,9 @@ export default function LoginPage() {
                   <>
                     <div className="grid grid-cols-2 gap-3">
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">First Name</label>
+                        <label htmlFor="signupFirstName" className="text-[11px] font-bold uppercase tracking-wider text-white/60">First Name</label>
                         <input
+                          id="signupFirstName"
                           type="text"
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
@@ -581,8 +588,9 @@ export default function LoginPage() {
                         />
                       </div>
                       <div className="space-y-1.5">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">Last Name</label>
+                        <label htmlFor="signupLastName" className="text-[11px] font-bold uppercase tracking-wider text-white/60">Last Name</label>
                         <input
+                          id="signupLastName"
                           type="text"
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
@@ -596,9 +604,10 @@ export default function LoginPage() {
 
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between">
-                        <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">Date of Birth</label>
+                        <label htmlFor="signupDob" className="text-[11px] font-bold uppercase tracking-wider text-white/60">Date of Birth</label>
                       </div>
                       <input
+                        id="signupDob"
                         type="date"
                         value={dob}
                         onChange={(e) => setDob(e.target.value)}
@@ -643,8 +652,9 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">Email Address</label>
+                      <label htmlFor="signupEmail" className="text-[11px] font-bold uppercase tracking-wider text-white/60">Email Address</label>
                       <input
+                        id="signupEmail"
                         type="email"
                         value={email}
                         onChange={(e) => setEmail(e.target.value)}
@@ -656,8 +666,9 @@ export default function LoginPage() {
                     </div>
 
                     <div className="space-y-1.5">
-                      <label className="text-[11px] font-bold uppercase tracking-wider text-white/60">Password (10+ Chars)</label>
+                      <label htmlFor="signupPassword" className="text-[11px] font-bold uppercase tracking-wider text-white/60">Password (10+ Chars)</label>
                       <input
+                        id="signupPassword"
                         type="password"
                         value={password}
                         onChange={(e) => setPassword(e.target.value)}
@@ -738,10 +749,11 @@ export default function LoginPage() {
             )}
 
             <div className="space-y-1.5">
-              <label className="text-[11px] font-bold uppercase tracking-wider text-white/60 block text-center">
+              <label htmlFor="otpCode" className="text-[11px] font-bold uppercase tracking-wider text-white/60 block text-center">
                 6-Digit Verification Code
               </label>
               <input
+                id="otpCode"
                 type="text"
                 maxLength={6}
                 value={otpCode}
@@ -754,10 +766,11 @@ export default function LoginPage() {
 
             {step === "otp_migration" && (
               <div className="space-y-1 pt-2 border-t border-white/10">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
+                <label htmlFor="otpNewPassword" className="text-[11px] font-bold uppercase tracking-wider text-emerald-400">
                   Create Your New Password
                 </label>
                 <input
+                  id="otpNewPassword"
                   type="password"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
@@ -794,7 +807,7 @@ export default function LoginPage() {
               >
                 ← Back to Sign In
               </button>
-              
+
               <button
                 type="button"
                 onClick={handleResendOtp}

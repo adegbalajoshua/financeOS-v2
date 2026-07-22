@@ -1,229 +1,39 @@
 # API Documentation
 
-This document covers every function exposed as a `google.script.run` endpoint, the `doPost` webhook contract, and the internal module APIs (`Database`, `FinanceEngine`) that back them.
-
-## Global Endpoints (`google.script.run`)
-
-These are the only functions the frontend is permitted to call, since `google.script.run` can only invoke top-level global functions, not object methods.
-
-### `fetchDashboardPayload(cycle)`
-
-Fetches the dashboard payload for a given cycle, using the cache when available.
-
-**Parameters**
-| Name | Type | Required | Description |
-|---|---|---|---|
-| `cycle` | `string` | No | Budget cycle to load, e.g. `"Jul-26"`. Defaults to `Settings.Active_Cycle` if omitted. |
-
-**Returns:** `Object` (see [Dashboard Payload Shape](#dashboard-payload-shape)) or `{ error: true, message: string }` on failure.
-
-**Caching:** Reads from `CacheService.getDocumentCache()` first, keyed by `CONFIG.CACHE.KEY_PREFIX + cycle`. On a cache miss, calls `FinanceEngine.generateDashboardPayload` and writes the result back with a TTL of `CONFIG.CACHE.EXPIRATION_SEC` (default 300 seconds).
-
----
-
-### `forceRefreshDashboard(cycle)`
-
-Identical to `fetchDashboardPayload`, but clears the cache first, guaranteeing fresh computation.
-
-**Parameters:** same as above.
-
-**Returns:** same shape as `fetchDashboardPayload`.
-
----
-
-### `submitNewTransaction(formData)`
-
-Appends a new row to `Daily Log` and clears the cache.
-
-**Parameters**
-
-| Field | Type | Required | Notes |
-|---|---|---|---|
-| `type` | `string` | Yes | `"Expense"`, `"Income"`, or `"Transfer"` |
-| `category` | `string` | Yes | Must match a category used in `Budget Setup` to appear in budget tracking, otherwise it's recorded but untracked |
-| `description` | `string` | Yes | Free text |
-| `account` | `string` | Yes | Source account name, must match an entry in `Accounts` |
-| `toAccount` | `string` | Only for `Transfer` | Destination account name |
-| `amount` | `number` \| `string` | Yes | Coerced with `Number()` |
-
-**Returns:** `{ success: true }` or `{ error: true, message: string }`.
-
-**Side effects:** Appends to `Daily Log` using the active cycle from `Settings`, stamps the date as `dd-MMM-yy` in the script's timezone, sets the note to `"Dashboard Entry"`, then calls `API.clearCache()`.
-
-### `updateTransaction(transactionId, formData)`
-
-Overwrites an existing `Daily Log` row by `Transaction ID`. `type`, `date`, and `budgetCycle` are preserved from the original row; `category`, `account`, `toAccount`, `amount`, and `description` can change. Sets the note to `"Dashboard Entry (Edited)"`.
-
-**Returns:** `{ success: true }` or `{ error: true, message: string }`.
-
----
-
-### `deleteTransaction(transactionId)`
-
-Deletes a `Daily Log` row by `Transaction ID` and clears the cache.
-
-**Returns:** `{ success: true }` or `{ error: true, message: string }`.
-
-### `fetchTrendsData()`
-
-Returns income/spent/bankCharges/receivables aggregated per budget cycle, across every cycle present in `Daily Log`. No caching, read-only, cheap to recompute.
-
-**Returns:** `{ cycles: [{ cycle, income, spent, bankCharges, receivables, net }] }`
-
----
-
-### `fetchManageData()`
-
-Returns all accounts and the active cycle's budget lines, for the Manage panel.
-
-**Returns:** `{ cycle, accounts: [{ name, type, openingBalance, status }], budgets: [{ type, category, amount }] }`
-
----
-
-### `submitAccount(formData)`
-
-Creates a new account, or updates an existing one matched by `formData.name`. Renaming an existing account (changing `name` while an original name is present) is rejected client-side, see `docs/TROUBLESHOOTING.md`.
-
-**Parameters:** `name`, `type` (`Bank`/`Mobile`/`Cash`/`Savings`), `openingBalance`, `status` (`Active`/`Inactive`)
-
-**Returns:** `{ success: true }` or `{ error: true, message }`
-
----
-
-### `deactivateAccount(name)`
-
-Sets an account's `Status` to `Inactive`. Never deletes the row.
-
----
-
-### `submitBudgetLine(formData)`
-
-Creates or updates a budget line for the active cycle, matched by `(type, category)`.
-
-**Parameters:** `type` (`Expense`/`Saving`), `category`, `amount`
-
----
-
-### `deleteBudgetLine(type, category)`
-
-Removes a budget line from the active cycle.
-
-## `API` Module (Internal)
-
-Not directly callable from the frontend, `api.js` exposes these methods internally, wrapped by the global endpoints above.
-
-### `API.getDashboardData(requestedCycle)`
-
-Core logic behind both `fetchDashboardPayload` and `forceRefreshDashboard`. Resolves the target cycle, checks cache, falls back to `FinanceEngine.generateDashboardPayload`, attaches `settings` to the payload, and writes back to cache.
-
-### `API.clearCache()`
-
-Removes the cached payload for the currently active cycle. Called automatically by `submitNewTransaction`, `startNewCycle`, and `doPost`. Any new write path added to the codebase must call this too, or the dashboard will silently show stale data for up to `CONFIG.CACHE.EXPIRATION_SEC` seconds.
-
-## `FinanceEngine` Module (Internal)
-
-Pure business logic, no direct spreadsheet access. Consumed by `api.js` and `analytics.js`.
-
-### `FinanceEngine.generateDashboardPayload(targetCycle)`
-
-Orchestrates the full payload assembly described in [Architecture: Data Flow](ARCHITECTURE.md#data-flow-dashboard-payload-assembly).
-
-**Returns:**
-
-```js
-{
-  cycle: string,
-  kpis: {
-    income: number,
-    spent: number,
-    bankCharges: number,
-    liquidCash: number,
-    receivables: number
-  },
-  accounts: [{ name: string, balance: number }],
-  expenses: [{ category, budget, spent, remaining, percentUsed }],
-  savings: [{ category, budget, spent, remaining, percentUsed }],
-  receivableList: [{ desc: string, amount: number }]
-  recentTransactions: [{ date, desc, amount, type, category }],
-  settings: { Active_Cycle, Currency, Default_Category, Default_Account }
-}
-```
-
-### `FinanceEngine._parseNum(value)`
-
-Strips currency symbols and separators (e.g. `"₦70,000"` → `70000`). Returns `0` for falsy or unparseable input.
-
-### `FinanceEngine._calculateAccountBalances(accounts, allTransactions)`
-
-Computes running balances for every `Active` account by applying every transaction's `From Account` (debit) and `To Account` (credit) fields, then sums accounts of type `Bank`, `Mobile`, or `Cash` into `liquidTotal`.
-
-### `FinanceEngine._summarizeCycle(cycleTransactions)`
-
-Aggregates a single cycle's transactions into total income, total spent, bank charges, total receivables, a per-category actuals map, and a receivables list.
-
-### `FinanceEngine._mergeBudgets(cycleBudgets, actualsMap, typeFilter)`
-
-Joins `Budget Setup` rows (filtered by `Expense` or `Saving`) against the actuals map to compute remaining budget and percent utilized.
-
-## `Database` Module (Internal)
-
-The sole owner of `SpreadsheetApp` access. See [database.js](../database.js) for full JSDoc. Key methods:
-
-| Method | Purpose |
-|---|---|
-| `getSheet(sheetName)` | Returns a sheet, throws if not found |
-| `getSheetDataAsObjects(sheetName)` | Maps rows to objects keyed by header row |
-| `getSettings()` | Returns the `Settings` sheet as a key/value object |
-| `updateSetting(key, value)` | Updates a single setting in place |
-| `appendTransaction(transaction)` | Appends a row array to `Daily Log` |
-| `appendBudgetRows(rows)` | Batch-appends rows to `Budget Setup` |
-| `clearCharts(sheetName)` | Removes all native charts from a sheet |
-| `clearSheet(sheetName)` | Clears all contents of a sheet |
-
-## Webhook: `doPost(e)`
-
-See [Telegram Integration Guide](TELEGRAM_INTEGRATION.md) for the full contract and examples.
-
-**Request body (JSON):**
-
-```json
-{
-  "desc": "Coffee : 1500",
-  "date": "2026-07-06T00:00:00.000Z",
-  "cycle": "Jul-26",
-  "type": "Expense",
-  "cat": "Discretionary",
-  "account": "Zenith",
-  "to": ""
-}
-```
-
-Every field except `desc` is optional and falls back to `Settings` defaults.
-
-**Response (JSON):**
-
-Success:
-```json
-{ "status": "success", "message": "Logged: Coffee (1500)" }
-```
-
-Failure:
-```json
-{ "status": "error", "message": "<error string>" }
-```
-
-## Dashboard Payload Shape
-
-The full object returned by `fetchDashboardPayload` / `forceRefreshDashboard`, with `settings` attached by `API.getDashboardData`:
-
-```js
-{
-  cycle: "Jul-26",
-  kpis: { income, spent, bankCharges, liquidCash, receivables },
-  accounts: [{ name, balance }],
-  expenses: [{ category, budget, spent, remaining, percentUsed }],
-  savings: [{ category, budget, spent, remaining, percentUsed }],
-  receivableList: [{ desc, amount }],
-  settings: { Active_Cycle, Currency, Default_Category, Default_Account }
-}
-```
+The FinanceOS backend uses Next.js API Routes. All requests must include a valid session token cookie. The server validates the JSON Web Token (JWT) signature before processing the request.
+
+## Authentication Routes
+
+### `POST /api/auth/otp/send`
+Requests an email verification code.
+- **Request Body**: `{ "email": "user@example.com" }`
+- **Behavior**: The server generates a random six-digit code. The server stores the code in the database. The server sends the code via SMTP. The system enforces a sixty-second cooldown between requests.
+
+### `POST /api/auth/otp/verify`
+Verifies the email verification code.
+- **Request Body**: `{ "email": "user@example.com", "code": "123456" }`
+- **Behavior**: The server checks the code against the database. The server tracks failed attempts. The server locks out the code after five failures. The server deletes the code after successful verification.
+
+## Data Synchronization Routes
+
+### `GET /api/supabase/sync`
+Retrieves the user's data from the database.
+- **Query Parameters**: None. The server identifies the user via the session token.
+- **Response**: Returns a JSON object containing `events`, `accounts`, and `budgets` arrays.
+
+### `POST /api/supabase/sync`
+Synchronizes the local data to the database.
+- **Request Body**: `{ "events": [...], "accounts": [...], "budgets": [...] }`
+- **Behavior**: The server validates the arrays against Zod schemas. The server passes the payload to the domain services. The domain services push the arrays to the database. The database uses triggers to prevent stale writes.
+
+## Account Management Routes
+
+### `POST /api/auth/register`
+Creates a new user profile.
+- **Request Body**: `{ "email": "user@example.com", "password": "...", "name": "..." }`
+- **Behavior**: The server hashes the password. The server creates the user record in the `finance_users` table.
+
+### `GET /api/auth/check-status`
+Checks the onboarding status of a user.
+- **Query Parameters**: `email`
+- **Response**: Returns `{ "exists": true/false, "hasCompletedOnboarding": true/false }`.

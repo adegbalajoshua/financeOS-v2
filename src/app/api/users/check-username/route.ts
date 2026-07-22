@@ -8,6 +8,7 @@ import { validateUsername } from "@/domain/users/usernameValidation";
  * High-performance debounced check endpoint verifying if a $cashtag or @handle is available.
  */
 export async function GET(req: NextRequest) {
+  console.log("Check-username API Route Hit!");
   try {
     const { searchParams } = new URL(req.url);
     const rawUsername = searchParams.get("q") || searchParams.get("username") || "";

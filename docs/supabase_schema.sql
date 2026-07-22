@@ -1,16 +1,17 @@
 -- ==============================================================================
 -- financeOS Supabase / PostgreSQL Schema Migration
--- Run this script inside your Supabase SQL Editor (Project -> SQL Editor -> New Query)
+-- Run this script inside your Supabase SQL Editor.
 -- ==============================================================================
 
 -- 1. Create finance_accounts table
+-- This table stores user financial accounts.
 CREATE TABLE IF NOT EXISTS public.finance_accounts (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL DEFAULT 'default_user',
     name TEXT NOT NULL,
     type TEXT NOT NULL,
     currency TEXT NOT NULL DEFAULT 'NGN',
-    balance BIGINT NOT NULL DEFAULT 0, -- Stored in kobo/cents
+    balance BIGINT NOT NULL DEFAULT 0,
     is_active BOOLEAN NOT NULL DEFAULT true,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -18,19 +19,21 @@ CREATE TABLE IF NOT EXISTS public.finance_accounts (
 );
 
 -- 2. Create finance_budgets table
+-- This table stores user budgets.
 CREATE TABLE IF NOT EXISTS public.finance_budgets (
     id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL DEFAULT 'default_user',
     budget_cycle_id TEXT NOT NULL,
     category TEXT NOT NULL,
-    limit_amount BIGINT NOT NULL DEFAULT 0, -- Stored in kobo/cents
-    spent_amount BIGINT NOT NULL DEFAULT 0, -- Stored in kobo/cents
+    limit_amount BIGINT NOT NULL DEFAULT 0,
+    spent_amount BIGINT NOT NULL DEFAULT 0,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     deleted_at TIMESTAMPTZ
 );
 
--- 3. Create finance_events table (The Immutable Event Store)
+-- 3. Create finance_events table
+-- This table stores the immutable event log.
 CREATE TABLE IF NOT EXISTS public.finance_events (
     event_id TEXT PRIMARY KEY,
     user_id TEXT NOT NULL DEFAULT 'default_user',
@@ -38,7 +41,7 @@ CREATE TABLE IF NOT EXISTS public.finance_events (
     event_type TEXT NOT NULL,
     budget_cycle_id TEXT NOT NULL,
     account_id TEXT,
-    amount BIGINT NOT NULL DEFAULT 0, -- Stored in kobo/cents
+    amount BIGINT NOT NULL DEFAULT 0,
     payload JSONB NOT NULL DEFAULT '{}'::jsonb,
     category TEXT NOT NULL DEFAULT 'General',
     description TEXT NOT NULL DEFAULT '',
@@ -47,7 +50,8 @@ CREATE TABLE IF NOT EXISTS public.finance_events (
     deleted_at TIMESTAMPTZ
 );
 
--- 4. Create Indexes for High-Performance Queries (<15ms)
+-- 4. Create Indexes
+-- These indexes accelerate database queries.
 CREATE INDEX IF NOT EXISTS idx_finance_events_user_id ON public.finance_events(user_id);
 CREATE INDEX IF NOT EXISTS idx_finance_events_timestamp ON public.finance_events(timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_finance_events_cycle ON public.finance_events(budget_cycle_id);
@@ -55,11 +59,11 @@ CREATE INDEX IF NOT EXISTS idx_finance_accounts_user_id ON public.finance_accoun
 CREATE INDEX IF NOT EXISTS idx_finance_budgets_user_id ON public.finance_budgets(user_id);
 
 -- 5. Enable Row Level Security (RLS) & Policies
+-- These policies restrict access to the tables.
 ALTER TABLE public.finance_accounts ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.finance_budgets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.finance_events ENABLE ROW LEVEL SECURITY;
 
--- Allow public/anon or authenticated access (For easy onboarding & API key sync)
 CREATE POLICY "Enable read/write for users based on user_id" ON public.finance_accounts
     FOR ALL USING (true) WITH CHECK (true);
 
@@ -69,16 +73,18 @@ CREATE POLICY "Enable read/write for users based on user_id" ON public.finance_b
 CREATE POLICY "Enable read/write for users based on user_id" ON public.finance_events
     FOR ALL USING (true) WITH CHECK (true);
 
--- 6. Create finance_users table (For Email & Password Authentication + Onboarding status)
+-- 6. Create finance_users table
+-- This table stores user authentication profiles.
+-- The table lacks a deleted_at column because the application does not support user soft-deletion.
 CREATE TABLE IF NOT EXISTS public.finance_users (
     id TEXT PRIMARY KEY,
     email TEXT UNIQUE NOT NULL,
-    username TEXT UNIQUE, -- $username handle / cashtag (clean alphanumeric string)
+    username TEXT UNIQUE,
     first_name TEXT,
     last_name TEXT,
-    dob DATE, -- ISO-8601 date of birth (YYYY-MM-DD) with strict 13+ age gating
-    name TEXT, -- Full display name
-    password_hash TEXT, -- Encrypted / hashed password using bcrypt/Argon2id
+    dob DATE,
+    name TEXT,
+    password_hash TEXT,
     has_completed_onboarding BOOLEAN NOT NULL DEFAULT false,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
@@ -92,13 +98,25 @@ ALTER TABLE public.finance_users ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Enable read/write for users based on email" ON public.finance_users
     FOR ALL USING (true) WITH CHECK (true);
 
--- 7. Atomic Sync Conflict Resolution Trigger
--- Prevents race conditions during batch upserts by enforcing updated_at strictly at the database engine level.
+-- 7. Create finance_verification_codes table
+-- This table stores email verification codes.
+-- The table lacks write-conflict protection.
+CREATE TABLE IF NOT EXISTS public.finance_verification_codes (
+    email TEXT PRIMARY KEY,
+    code TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    verified BOOLEAN NOT NULL DEFAULT false
+);
+
+ALTER TABLE public.finance_verification_codes ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Enable read/write for verification codes" ON public.finance_verification_codes
+    FOR ALL USING (true) WITH CHECK (true);
+
+-- 8. Atomic Sync Conflict Resolution Trigger (Events)
+-- This trigger rejects stale edits to the finance_events table.
 CREATE OR REPLACE FUNCTION protect_stale_finance_event_updates()
 RETURNS TRIGGER AS $$
 BEGIN
-    -- If the incoming updated_at is older or equal to the existing, ignore the update
-    -- by returning NULL, which silently skips the update for this specific row.
     IF NEW.updated_at <= OLD.updated_at THEN
         RETURN NULL;
     END IF;
@@ -112,7 +130,8 @@ BEFORE UPDATE ON public.finance_events
 FOR EACH ROW
 EXECUTE FUNCTION protect_stale_finance_event_updates();
 
--- 8. Atomic Sync Conflict Resolution Trigger (Accounts)
+-- 9. Atomic Sync Conflict Resolution Trigger (Accounts)
+-- This trigger rejects stale edits to the finance_accounts table.
 CREATE OR REPLACE FUNCTION protect_stale_finance_account_updates()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -129,7 +148,8 @@ BEFORE UPDATE ON public.finance_accounts
 FOR EACH ROW
 EXECUTE FUNCTION protect_stale_finance_account_updates();
 
--- 9. Atomic Sync Conflict Resolution Trigger (Budgets)
+-- 10. Atomic Sync Conflict Resolution Trigger (Budgets)
+-- This trigger rejects stale edits to the finance_budgets table.
 CREATE OR REPLACE FUNCTION protect_stale_finance_budget_updates()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -145,3 +165,57 @@ CREATE TRIGGER check_stale_finance_budgets
 BEFORE UPDATE ON public.finance_budgets
 FOR EACH ROW
 EXECUTE FUNCTION protect_stale_finance_budget_updates();
+-- 1. Create the trigger function if it doesn't already exist
+CREATE OR REPLACE FUNCTION finance_users_conflict_protection()
+RETURNS trigger AS $$
+BEGIN
+  -- Reject the update if the incoming updated_at is older than the current record's updated_at
+  IF NEW.updated_at < OLD.updated_at THEN
+    RETURN NULL;
+  END IF;
+  
+  -- Automatically bump updated_at if it wasn't explicitly provided in the UPDATE statement
+  IF NEW.updated_at IS NOT DISTINCT FROM OLD.updated_at THEN
+    NEW.updated_at = extract(epoch from now());
+  END IF;
+
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- 2. Drop the trigger if it exists to ensure a clean slate
+DROP TRIGGER IF EXISTS finance_users_conflict_trigger ON public.finance_users;
+
+-- 3. Create the BEFORE UPDATE trigger on finance_users
+CREATE TRIGGER finance_users_conflict_trigger
+BEFORE UPDATE ON public.finance_users
+FOR EACH ROW
+EXECUTE FUNCTION finance_users_conflict_protection();
+
+-- ==========================================
+-- MANUAL VERIFICATION SCRIPT
+-- Run these statements one by one in the Supabase SQL Editor
+-- ==========================================
+
+-- A. Insert a baseline user record
+INSERT INTO public.finance_users (id, email, password_hash, first_name, last_name, display_name, username, updated_at)
+VALUES ('test-user-id-999', 'test999@example.com', 'hash', 'Test', 'User', 'Test User', 'testuser999', 100);
+
+-- B. Valid update (newer updated_at -> should succeed and update the name)
+UPDATE public.finance_users
+SET display_name = 'Valid Update', updated_at = 200
+WHERE id = 'test-user-id-999';
+
+SELECT display_name, updated_at FROM public.finance_users WHERE id = 'test-user-id-999';
+-- Expected Output: display_name = 'Valid Update', updated_at = 200
+
+-- C. Stale update rejected (older updated_at -> should silently return NULL, leaving record unchanged)
+UPDATE public.finance_users
+SET display_name = 'Stale Update', updated_at = 150
+WHERE id = 'test-user-id-999';
+
+SELECT display_name, updated_at FROM public.finance_users WHERE id = 'test-user-id-999';
+-- Expected Output: display_name = 'Valid Update', updated_at = 200 (UNCHANGED)
+
+-- D. Clean up the test user
+DELETE FROM public.finance_users WHERE id = 'test-user-id-999';

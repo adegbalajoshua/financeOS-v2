@@ -28,19 +28,23 @@ export async function middleware(req: NextRequest) {
     pathname.startsWith("/api/auth/otp/send") ||
     pathname.startsWith("/api/auth/otp/verify") ||
     pathname.startsWith("/api/notifications/send") ||
-    pathname.startsWith("/api/demo/seed")
+    pathname.startsWith("/api/demo/seed") ||
+    pathname.startsWith("/api/activity/log")
   ) {
     const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() || req.headers.get("x-real-ip") || "127.0.0.1";
     const now = Date.now();
     const record = rateLimitMap.get(ip);
+    
+    // Use a more generous limit for activity logging (e.g. 120/min instead of 30/min)
+    const limitForRoute = pathname.startsWith("/api/activity/log") ? 120 : MAX_REQUESTS_PER_MINUTE;
 
     if (!record || now > record.resetTime) {
       rateLimitMap.set(ip, { count: 1, resetTime: now + WINDOW_SIZE_MS });
     } else {
       record.count += 1;
-      if (record.count > MAX_REQUESTS_PER_MINUTE) {
+      if (record.count > limitForRoute) {
         return NextResponse.json(
-          { error: "Too many requests. Rate limit exceeded (max 30 requests/minute). Please try again later." },
+          { error: `Too many requests. Rate limit exceeded (max ${limitForRoute} requests/minute). Please try again later.` },
           { status: 429, headers: { "Retry-After": "60" } }
         );
       }

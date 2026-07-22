@@ -11,7 +11,7 @@ export interface SupabaseCredentials {
  */
 export function getSupabaseClient(customCreds?: SupabaseCredentials | null): SupabaseClient | null {
   const url = customCreds?.url || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = customCreds?.key || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  const key = customCreds?.key || process.env.SUPABASE_SERVICE_ROLE_KEY || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "";
 
   if (!url || !key) {
     return null;
@@ -303,11 +303,17 @@ export class UserSupabaseService {
   }
 
   async updatePassword(email: string, passwordHash: string) {
-    return this.client.from("finance_users").update({ password_hash: passwordHash }).eq("email", email);
+    return this.client.from("finance_users").update({ 
+      password_hash: passwordHash,
+      updated_at: new Date().toISOString()
+    }).eq("email", email);
   }
 
   async updateOnboarding(email: string, hasCompleted: boolean) {
-    return this.client.from("finance_users").update({ has_completed_onboarding: hasCompleted }).eq("email", email);
+    return this.client.from("finance_users").update({ 
+      has_completed_onboarding: hasCompleted,
+      updated_at: new Date().toISOString()
+    }).eq("email", email);
   }
 
   async checkUserRecordsCount(email: string) {

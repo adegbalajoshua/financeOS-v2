@@ -15,11 +15,9 @@ async function getContext(req: NextRequest, body?: any) {
   }
   const userId = session.user.email || session.user.id;
 
-  const url = body?.url || req.nextUrl.searchParams.get("url") || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = body?.key || req.nextUrl.searchParams.get("key") || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-
-  const client = getSupabaseClient({ url, key });
-  return { userId, client, url, key, error: null };
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const client = getSupabaseClient();
+  return { userId, client, url, key: "", error: null };
 }
 
 /**

@@ -30,7 +30,7 @@ const securityHeaders = [
 const nextConfig: NextConfig = {
   output: "standalone",
   productionBrowserSourceMaps: false,
-  allowedDevOrigins: ["192.168.118.25", "localhost:3000", "127.0.0.1:3000"],
+  allowedDevOrigins: ["192.168.118.25", "192.168.8.195", "localhost:3000", "127.0.0.1:3000"],
   async headers() {
     return [
       {

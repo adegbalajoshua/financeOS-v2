@@ -1,40 +1,39 @@
 # Security Policy
 
-## Supported Versions
+## Architecture Summary
+The application is a Next.js web application. The application uses a Supabase PostgreSQL database. Data leaves the local device. The cloud stores the data.
 
-FinanceOS is pre-1.0 and distributed as source you deploy into your own Google account. There is no hosted service and no centrally patched version, so "supported version" means the latest commit on `main`.
+## Authentication
+The application uses NextAuth for user sessions. Users log in with credentials. New accounts require an email verification code.
 
-| Version | Supported |
-|---|---|
-| `main` (latest) | Yes |
-| Tagged releases prior to latest | No, upgrade to `main` |
+## Protections Currently In Place
+The server limits the rate of authentication requests.
+The server limits the rate of verification code requests.
+The server locks out a verification code after five failed attempts.
+The server enforces a cooldown period before a user can request a new verification code.
+The application disables demo accounts by default. An environment variable controls the demo accounts.
+Production environments require an authentication secret. The application refuses to start without the secret.
+The database protects the `finance_events` table against stale writes.
+The database protects the `finance_accounts` table against stale writes.
+The database protects the `finance_budgets` table against stale writes.
+
+## Known Limitations
+The application does not perform differential synchronization.
+The client pushes the full local dataset during every sync.
+The user interface provides no conflict resolution.
+The newest edit silently overwrites older data.
+The `finance_users` table lacks write-conflict protection.
+The `finance_verification_codes` table lacks write-conflict protection.
+Email delivery relies on a personal Gmail SMTP server.
+Email delivery does not use a verified sending domain.
+
+## Resolved Security Gaps
+The `middleware.ts` file cryptographically verifies session tokens.
+The middleware does not just check for cookie presence.
+The database enforces strict Row Level Security policies.
+The Row Level Security policies block all public access.
+The server connects to the database using a secret service role key.
+A direct request with the anonymous key returns zero rows.
 
 ## Reporting a Vulnerability
-
-Do not open a public GitHub issue for security vulnerabilities.
-
-Instead, use GitHub's private vulnerability reporting (**Security → Report a vulnerability** on the repository) or email the maintainer directly (see repository profile for contact). Include:
-
-- A description of the vulnerability and its impact.
-- Steps to reproduce, including any specific sheet configuration required.
-- The affected file(s) and function(s), if known.
-
-Expect an initial response within 5 business days. Confirmed vulnerabilities will be patched and disclosed via the [Changelog](CHANGELOG.md) with credit to the reporter, unless anonymity is requested.
-
-## Threat Model and Data Handling
-
-FinanceOS runs entirely inside your own Google account. Understanding what that means for security:
-
-- **Your spreadsheet is your database.** All financial data (transactions, balances, budgets) lives in the Google Sheet you control. FinanceOS never sends data to a third-party server.
-- **The webhook is the primary external attack surface.** `gateway.js` exposes a `doPost` endpoint intended for integrations like Telegram bots. If deployed as a public web app, anyone with the URL can POST transactions into your log. Deployment guidance in [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) covers restricting access appropriately, and you should treat the deployment URL as a secret.
-- **No authentication layer is built into the webhook.** `doPost` trusts the payload it receives. If you expose the endpoint publicly, add your own shared-secret check (for example, a token field in the JSON payload validated before the row is appended) before relying on it in production.
-- **Apps Script execution runs with your account's permissions.** Any script you paste into your own Apps Script project has access to whatever that project is authorized for. Only install code from sources you trust, and review third-party contributions before merging.
-- **Dashboard access is scoped to spreadsheet access.** The dashboard is a modal launched from within Sheets, so anyone with edit access to your spreadsheet can open it.
-
-## Best Practices for Deployers
-
-1. Never commit real financial data, API keys, or spreadsheet IDs into a public fork.
-2. If exposing the `doPost` webhook, add a shared-secret or signature check before merging any PR that relies on public exposure.
-3. Restrict spreadsheet sharing to accounts that should have transaction access, dashboard access follows spreadsheet access.
-4. Rotate your Web App deployment URL if you suspect it has leaked.
-5. Review the [Known Issues](CHANGELOG.md#unreleased) section before relying on the webhook for financial record-keeping, there are open discrepancies in account-column handling that could misattribute funds.
+Send an email to the maintainer to report a security concern. Provide steps to reproduce the issue.

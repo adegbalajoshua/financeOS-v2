@@ -4,17 +4,11 @@ import React, { useState } from "react";
 import { useAppData } from "@/lib/appContext";
 import { validateEventPayload } from "@/domain/events/validation";
 
+import { useTransactionForm, EVENT_TYPES } from "./hooks/useTransactionForm";
+
 interface EventComposerProps {
   onClose: () => void;
 }
-
-const EVENT_TYPES = [
-  { key: "EXPENSE",    label: "Expense",    typeStr: "EXPENSE_RECORDED",     icon: "💸", color: "#f43f5e" },
-  { key: "INCOME",     label: "Income",     typeStr: "INCOME_RECEIVED",      icon: "💰", color: "#10b981" },
-  { key: "TRANSFER",   label: "Transfer",   typeStr: "TRANSFER_COMPLETED",   icon: "↔️", color: "#f59e0b" },
-  { key: "SAVINGS",    label: "Savings",    typeStr: "SAVINGS_CONTRIBUTION", icon: "🎯", color: "#635BFF" },
-  { key: "RECEIVABLE", label: "Money Owed", typeStr: "RECEIVABLE_RECORDED",  icon: "⏳", color: "#8b5cf6" },
-];
 
 function formatCurrency(kobo: number) {
   return new Intl.NumberFormat("en-NG", { style: "currency", currency: "NGN", minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(kobo / 100);
@@ -22,105 +16,48 @@ function formatCurrency(kobo: number) {
 
 export function EventComposer({ onClose }: EventComposerProps) {
   const { accounts, recordEvent, isConnected, activeCycleId } = useAppData();
-  const [activeType, setActiveType] = useState("EXPENSE");
-  const [amount, setAmount] = useState<string>("");
-  const [category, setCategory] = useState<string>("");
-  const [accountName, setAccountName] = useState<string>(
-    accounts[0]?.name || "Cash Wallet"
-  );
-  const [fromAccountName, setFromAccountName] = useState<string>(
-    accounts[0]?.name || "Cash Wallet"
-  );
-  const [toAccountName, setToAccountName] = useState<string>(
-    accounts.length > 1 ? accounts[1].name : accounts[0]?.name || "Savings"
-  );
-  const [debtorName, setDebtorName] = useState<string>("");
-  const [dueDate, setDueDate] = useState<string>("");
-  const [description, setDescription] = useState<string>("");
-  const [isSubmitting, setIsSubmitting] = useState<boolean>(false);
-  const [error, setError] = useState<string | null>(null);
 
-  const activeMeta = EVENT_TYPES.find((t) => t.key === activeType) || EVENT_TYPES[0];
-
-  const handleTabChange = (key: string) => {
-    setActiveType(key);
-    setError(null);
-    if (key === "TRANSFER") {
-      setCategory("Account Transfer");
-    } else if (key === "SAVINGS") {
-      setCategory("Savings Goal");
-    } else if (key === "RECEIVABLE") {
-      setCategory("Money Owed / Debt");
-    } else if (category === "Account Transfer" || category === "Savings Goal" || category === "Money Owed / Debt" || category === "Client / Debt Receivable") {
-      setCategory("");
-    }
-  };
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) {
-      setError("Please enter a valid amount greater than 0");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    const koboAmount = Math.round(Number(amount) * 100);
-    const eventTypeStr = activeMeta.typeStr;
-
-    let payloadObj: Record<string, any> = {
-      amount: koboAmount,
-      description: description.trim() || undefined,
-    };
-
-    let targetAccount = accountName;
-
-    if (activeType === "TRANSFER" || activeType === "SAVINGS") {
-      payloadObj.fromAccountId = fromAccountName;
-      if (activeType === "TRANSFER") {
-        payloadObj.toAccountId = toAccountName;
-      } else {
-        payloadObj.toGoalId = toAccountName;
-      }
-      targetAccount = fromAccountName;
-    } else if (activeType === "RECEIVABLE") {
-      payloadObj.debtorName = debtorName.trim();
-      payloadObj.dueDate = dueDate || undefined;
-      targetAccount = accountName;
-    } else if (activeType === "INCOME") {
-      payloadObj.category = category.trim() || activeMeta.label;
-      payloadObj.toAccountId = accountName;
-    } else {
-      payloadObj.category = category.trim() || activeMeta.label;
-      payloadObj.fromAccountId = accountName;
-    }
-
-    const validation = validateEventPayload(eventTypeStr, payloadObj);
-    if (!validation.success) {
-      setError(validation.error);
-      setIsSubmitting(false);
-      return;
-    }
-
-    const res = await recordEvent({
-      type: eventTypeStr,
-      amount: koboAmount,
-      category: category.trim() || activeMeta.label,
-      description: description.trim(),
-      accountName: targetAccount,
-      payload: payloadObj,
+  const handleRecordEvent = async (data: any) => {
+    return await recordEvent({
+      ...data,
       budgetCycleId: activeCycleId,
     });
-
-    setIsSubmitting(false);
-
-    if (res) {
-      onClose();
-    } else {
-      setError("Failed to save transaction. Please check your connection.");
-    }
   };
+
+  const form = useTransactionForm(
+    {
+      accountName: accounts[0]?.name || "Cash Wallet",
+      fromAccountName: accounts[0]?.name || "Cash Wallet",
+      toAccountName: accounts.length > 1 ? accounts[1].name : accounts[0]?.name || "Savings",
+    },
+    handleRecordEvent,
+    onClose
+  );
+
+  const {
+    activeType,
+    amount,
+    setAmount,
+    category,
+    setCategory,
+    accountName,
+    setAccountName,
+    fromAccountName,
+    setFromAccountName,
+    toAccountName,
+    setToAccountName,
+    debtorName,
+    setDebtorName,
+    dueDate,
+    setDueDate,
+    description,
+    setDescription,
+    isSubmitting,
+    error,
+    activeMeta,
+    handleTabChange,
+    handleSubmit,
+  } = form;
 
   return (
     <div
@@ -206,7 +143,8 @@ export function EventComposer({ onClose }: EventComposerProps) {
           {/* Amount */}
           <div>
             <label
-              className="block text-xs font-bold uppercase tracking-wide mb-1.5"
+              htmlFor="amount"
+              className="block text-xs font-bold uppercase tracking-wide mb-2"
               style={{ color: "var(--muted-foreground)" }}
             >
               Amount (₦)
@@ -219,6 +157,7 @@ export function EventComposer({ onClose }: EventComposerProps) {
                 ₦
               </span>
               <input
+                id="amount"
                 type="number"
                 step="any"
                 placeholder="0.00"
@@ -242,12 +181,14 @@ export function EventComposer({ onClose }: EventComposerProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label
+                  htmlFor="fromAccountName"
                   className="block text-xs font-bold uppercase tracking-wide mb-1.5"
                   style={{ color: "var(--muted-foreground)" }}
                 >
                   From Account (Source)
                 </label>
                 <select
+                  id="fromAccountName"
                   value={fromAccountName}
                   onChange={(e) => setFromAccountName(e.target.value)}
                   className="w-full rounded-xl py-2.5 px-4 text-sm font-semibold focus:outline-none focus:ring-2 transition-all"
@@ -267,12 +208,14 @@ export function EventComposer({ onClose }: EventComposerProps) {
 
               <div>
                 <label
+                  htmlFor="toAccountName"
                   className="block text-xs font-bold uppercase tracking-wide mb-1.5"
                   style={{ color: "var(--muted-foreground)" }}
                 >
                   To Account (Destination)
                 </label>
                 <select
+                  id="toAccountName"
                   value={toAccountName}
                   onChange={(e) => setToAccountName(e.target.value)}
                   className="w-full rounded-xl py-2.5 px-4 text-sm font-semibold focus:outline-none focus:ring-2 transition-all"
@@ -294,12 +237,14 @@ export function EventComposer({ onClose }: EventComposerProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label
+                  htmlFor="debtorName"
                   className="block text-xs font-bold uppercase tracking-wide mb-1.5"
                   style={{ color: "var(--muted-foreground)" }}
                 >
                   Who owes this money? (Person or Business)
                 </label>
                 <input
+                  id="debtorName"
                   type="text"
                   placeholder="e.g. Acme Corp / John Doe"
                   value={debtorName}
@@ -315,12 +260,14 @@ export function EventComposer({ onClose }: EventComposerProps) {
 
               <div>
                 <label
+                  htmlFor="dueDate"
                   className="block text-xs font-bold uppercase tracking-wide mb-1.5"
                   style={{ color: "var(--muted-foreground)" }}
                 >
                   Expected Due Date
                 </label>
                 <input
+                  id="dueDate"
                   type="date"
                   value={dueDate}
                   onChange={(e) => setDueDate(e.target.value)}
@@ -337,12 +284,14 @@ export function EventComposer({ onClose }: EventComposerProps) {
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label
+                  htmlFor="category"
                   className="block text-xs font-bold uppercase tracking-wide mb-1.5"
                   style={{ color: "var(--muted-foreground)" }}
                 >
                   Category
                 </label>
                 <input
+                  id="category"
                   type="text"
                   placeholder="e.g. Groceries, Salary, Rent"
                   value={category}
@@ -384,19 +333,21 @@ export function EventComposer({ onClose }: EventComposerProps) {
           )}
 
           {/* Description */}
-          <div>
+          <div className="mt-4">
             <label
+              htmlFor="description"
               className="block text-xs font-bold uppercase tracking-wide mb-1.5"
               style={{ color: "var(--muted-foreground)" }}
             >
-              Description / Notes (Optional)
+              Description (Optional)
             </label>
             <input
+              id="description"
               type="text"
-              placeholder="Add memo or transaction reference…"
+              placeholder="Add more details about this transaction..."
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full rounded-xl py-2.5 px-4 text-sm font-medium focus:outline-none focus:ring-2 transition-all"
+              className="w-full rounded-xl py-2.5 px-4 text-sm font-semibold focus:outline-none focus:ring-2 transition-all"
               style={{
                 backgroundColor: "var(--muted)",
                 border: "1px solid var(--border)",

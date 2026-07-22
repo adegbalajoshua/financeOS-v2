@@ -4,18 +4,12 @@ import React, { useState } from "react";
 import { useAppData } from "@/lib/appContext";
 import { validateEventPayload } from "@/domain/events/validation";
 
+import { useTransactionForm, EVENT_TYPES } from "./hooks/useTransactionForm";
+
 interface EventEditModalProps {
   event: any;
   onClose: () => void;
 }
-
-const EVENT_TYPES = [
-  { key: "EXPENSE",    label: "Expense",    typeStr: "EXPENSE_RECORDED",     icon: "💸", color: "#f43f5e" },
-  { key: "INCOME",     label: "Income",     typeStr: "INCOME_RECEIVED",      icon: "💰", color: "#10b981" },
-  { key: "TRANSFER",   label: "Transfer",   typeStr: "TRANSFER_COMPLETED",   icon: "↔️", color: "#f59e0b" },
-  { key: "SAVINGS",    label: "Savings",    typeStr: "SAVINGS_CONTRIBUTION", icon: "🎯", color: "#635BFF" },
-  { key: "RECEIVABLE", label: "Receivable", typeStr: "RECEIVABLE_RECORDED",  icon: "⏳", color: "#8b5cf6" },
-];
 
 export function EventEditModal({ event, onClose }: EventEditModalProps) {
   const { accounts, budgets, updateEvent } = useAppData();
@@ -31,87 +25,54 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
     ? "RECEIVABLE"
     : "EXPENSE";
 
-  const [activeType, setActiveType] = useState(initialTypeKey);
-  const [amount, setAmount] = useState<string>(((event.amount || 0) / 100).toString());
-  const [category, setCategory] = useState<string>(event.category || "");
-  const [description, setDescription] = useState<string>(event.description || "");
-  
   const initialFromAcc = event.payload?.fromAccountId || event.payload?.fromAccount || event.accountName || accounts[0]?.name || "Zenith";
   const initialToAcc = event.payload?.toAccountId || event.payload?.toGoalId || event.payload?.toAccount || accounts[1]?.name || "Destination";
   
-  const [accountName, setAccountName] = useState<string>(initialFromAcc);
-  const [fromAccountName, setFromAccountName] = useState<string>(initialFromAcc);
-  const [toAccountName, setToAccountName] = useState<string>(initialToAcc);
-  const [debtorName, setDebtorName] = useState<string>(event.payload?.debtorName || event.payload?.clientName || "");
-  
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const activeMeta = EVENT_TYPES.find((t) => t.key === activeType) || EVENT_TYPES[0];
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!amount || Number(amount) <= 0) {
-      setError("Please enter a valid amount greater than 0");
-      return;
-    }
-
-    setIsSubmitting(true);
-    setError(null);
-
-    const kobo = Math.round(Number(amount) * 100);
-    let updatedPayload: Record<string, any> = {
-      ...(event.payload || {}),
-      amount: kobo,
-      description: description.trim() || undefined,
-    };
-
-    let updatedAccountName = accountName;
-
-    if (activeType === "TRANSFER" || activeType === "SAVINGS") {
-      updatedAccountName = fromAccountName;
-      updatedPayload.fromAccountId = fromAccountName;
-      if (activeType === "TRANSFER") {
-        updatedPayload.toAccountId = toAccountName;
-      } else {
-        updatedPayload.toGoalId = toAccountName;
-      }
-    } else if (activeType === "RECEIVABLE") {
-      updatedAccountName = accountName;
-      updatedPayload.debtorName = debtorName.trim();
-      // dueDate is intentionally left alone here for now to avoid overwriting unless specifically mapped
-    } else if (activeType === "INCOME") {
-      updatedPayload.category = category.trim() || activeMeta.label;
-      updatedPayload.toAccountId = accountName;
-    } else {
-      updatedPayload.category = category.trim() || activeMeta.label;
-      updatedPayload.fromAccountId = accountName;
-    }
-
-    const validation = validateEventPayload(activeMeta.typeStr, updatedPayload);
-    if (!validation.success) {
-      setError(validation.error);
-      setIsSubmitting(false);
-      return;
-    }
-
-    const success = await updateEvent(event.id || event.eventId || "", {
-      type: activeMeta.typeStr,
-      eventType: activeMeta.typeStr,
-      amount: kobo,
-      category: category.trim() || activeMeta.label,
-      description: description.trim(),
-      accountName: updatedAccountName,
-      payload: updatedPayload,
+  const handleUpdateEvent = async (data: any) => {
+    return await updateEvent(event.id || event.eventId || "", {
+      ...data,
+      eventType: data.type,
     });
-
-    setIsSubmitting(false);
-    if (success) {
-      onClose();
-    } else {
-      setError("Failed to update transaction. Please check console.");
-    }
   };
+
+  const form = useTransactionForm(
+    {
+      activeType: initialTypeKey,
+      amount: ((event.amount || 0) / 100).toString(),
+      category: event.category || "",
+      description: event.description || "",
+      accountName: initialFromAcc,
+      fromAccountName: initialFromAcc,
+      toAccountName: initialToAcc,
+      debtorName: event.payload?.debtorName || event.payload?.clientName || "",
+      originalPayload: event.payload || {},
+    },
+    handleUpdateEvent,
+    onClose
+  );
+
+  const {
+    activeType,
+    amount,
+    setAmount,
+    category,
+    setCategory,
+    accountName,
+    setAccountName,
+    fromAccountName,
+    setFromAccountName,
+    toAccountName,
+    setToAccountName,
+    debtorName,
+    setDebtorName,
+    description,
+    setDescription,
+    isSubmitting,
+    error,
+    activeMeta,
+    handleTabChange,
+    handleSubmit,
+  } = form;
 
   const inputStyle: React.CSSProperties = {
     backgroundColor: "var(--muted)",
@@ -165,8 +126,8 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
                 <button
                   key={t.key}
                   type="button"
-                  onClick={() => setActiveType(t.key)}
-                  className={`py-2 rounded-xl text-xs font-bold transition-all flex flex-col items-center gap-0.5 ${
+                  onClick={() => handleTabChange(t.key)}
+                  className={`py-2 rounded-xl text-xs font-bold transition-all flex flex-col sm:flex-row items-center justify-center gap-1 sm:gap-2 ${
                     isActive ? "bg-card text-foreground shadow-sm scale-102" : "text-muted-foreground hover:text-foreground"
                   }`}
                 >
@@ -189,10 +150,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
           {/* Amount and Category Grid */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+              <label htmlFor="editAmount" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                 Amount (₦ Naira)
               </label>
               <input
+                id="editAmount"
                 type="number"
                 step="0.01"
                 placeholder="0.00"
@@ -204,10 +166,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
             </div>
 
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+              <label htmlFor="editCategory" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                 Category
               </label>
               <input
+                id="editCategory"
                 type="text"
                 list="edit-category-list"
                 placeholder="e.g. Groceries or Transport"
@@ -228,10 +191,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
           {(activeType === "TRANSFER" || activeType === "SAVINGS") ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+                <label htmlFor="editFromAccount" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                   From Account
                 </label>
                 <select
+                  id="editFromAccount"
                   value={fromAccountName}
                   onChange={(e) => setFromAccountName(e.target.value)}
                   style={{ ...inputStyle, padding: "0.625rem 0.75rem" }}
@@ -242,10 +206,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+                <label htmlFor="editToAccount" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                   {activeType === "SAVINGS" ? "Target Wealth Account / Goal" : "To Account"}
                 </label>
                 <select
+                  id="editToAccount"
                   value={toAccountName}
                   onChange={(e) => setToAccountName(e.target.value)}
                   style={{ ...inputStyle, padding: "0.625rem 0.75rem" }}
@@ -259,10 +224,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
           ) : activeType === "RECEIVABLE" ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+                <label htmlFor="editSourceAccount" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                   Source Account
                 </label>
                 <select
+                  id="editSourceAccount"
                   value={accountName}
                   onChange={(e) => setAccountName(e.target.value)}
                   style={{ ...inputStyle, padding: "0.625rem 0.75rem" }}
@@ -273,10 +239,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
                 </select>
               </div>
               <div>
-                <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+                <label htmlFor="editDebtorName" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                   Debtor Name (Client/Friend)
                 </label>
                 <input
+                  id="editDebtorName"
                   type="text"
                   placeholder="e.g. Caleb"
                   value={debtorName}
@@ -288,10 +255,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
             </div>
           ) : (
             <div>
-              <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+              <label htmlFor="editDestAccount" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
                 {activeType === "INCOME" ? "Destination Account (Where Money Landed)" : "Source Account (Paid From)"}
               </label>
               <select
+                id="editDestAccount"
                 value={accountName}
                 onChange={(e) => setAccountName(e.target.value)}
                 style={{ ...inputStyle, padding: "0.625rem 0.75rem" }}
@@ -305,10 +273,11 @@ export function EventEditModal({ event, onClose }: EventEditModalProps) {
 
           {/* Description */}
           <div>
-            <label className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
+            <label htmlFor="editDescription" className="block text-xs font-bold uppercase tracking-wide mb-1.5" style={{ color: "var(--muted-foreground)" }}>
               Description / Notes
             </label>
             <input
+              id="editDescription"
               type="text"
               placeholder="e.g. Cat litter or Dinner with Seun"
               value={description}

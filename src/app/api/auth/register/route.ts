@@ -52,10 +52,7 @@ export async function POST(req: NextRequest) {
     const computedName = name || (cleanFirstName && cleanLastName ? `${cleanFirstName} ${cleanLastName}` : cleanEmail.split("@")[0]);
     const cleanName = sanitizeInput(computedName);
 
-    const customCreds = {
-      url: url || req.headers.get("x-supabase-url") || "",
-      key: key || req.headers.get("x-supabase-key") || "",
-    };
+    const customCreds = null;
 
     const user = await registerNewUser(
       cleanEmail,

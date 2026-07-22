@@ -7,9 +7,8 @@ import { auth } from "@/auth";
  * Helper to resolve Supabase client from request params or environment.
  */
 function getClient(req: NextRequest, body?: any) {
-  const url = body?.url || req.nextUrl.searchParams.get("url") || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
-  const key = body?.key || req.nextUrl.searchParams.get("key") || process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-  return { client: getSupabaseClient({ url, key }), url, key };
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  return { client: getSupabaseClient(), url, key: "" };
 }
 
 /**

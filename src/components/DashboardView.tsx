@@ -28,6 +28,20 @@ class DashboardErrorBoundary extends Component<{ children: ReactNode }, { hasErr
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("Dashboard caught error:", error, errorInfo);
+    try {
+      fetch("/api/activity/log", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          log_type: "error",
+          category: "client_error",
+          message: error.message.substring(0, 1000),
+          metadata: { stack: error.stack, componentStack: errorInfo.componentStack },
+        }),
+      }).catch(() => {});
+    } catch (e) {
+      // Ignore
+    }
   }
 
   render() {
